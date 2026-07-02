@@ -1,0 +1,5 @@
+{"timestamp": "2026-07-02T15:33:28.513938+00:00", "event": "task_found", "task_id": "fake_initial_task", "details": {"path": "tasks/pending/fake_initial_task.json"}}
+{"timestamp": "2026-07-02T15:33:28.514851+00:00", "event": "task_moved_to_running", "task_id": "fake_initial_task", "details": {"path": "tasks/running/fake_initial_task.json"}}
+{"timestamp": "2026-07-02T15:33:28.515692+00:00", "event": "task_started", "task_id": "fake_initial_task", "details": {"title": "Fake initial harness test"}}
+{"timestamp": "2026-07-02T15:33:28.516367+00:00", "event": "report_created", "task_id": "fake_initial_task", "details": {"path": "reports/fake_initial_task.md"}}
+{"timestamp": "2026-07-02T15:33:28.516820+00:00", "event": "task_moved_to_done", "task_id": "fake_initial_task", "details": {"path": "tasks/done/fake_initial_task.json"}}

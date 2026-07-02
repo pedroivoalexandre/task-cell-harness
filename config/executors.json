@@ -1,0 +1,16 @@
+{
+  "executors": {
+    "gemini_s10": {
+      "type": "cli",
+      "container": "debian-gemini",
+      "command": "gemini",
+      "enabled": false
+    },
+    "codex_s10": {
+      "type": "cli",
+      "container": "ubuntu-codex",
+      "command": "codex",
+      "enabled": false
+    }
+  }
+}

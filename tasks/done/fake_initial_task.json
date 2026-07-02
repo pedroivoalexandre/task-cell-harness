@@ -1,0 +1,7 @@
+{
+  "id": "fake_initial_task",
+  "title": "Fake initial harness test",
+  "description": "Validate folder structure, JSONL logs, report generation, and task movement without calling agents.",
+  "executor": null,
+  "created_at": "2026-07-02T15:33:28.405656+00:00"
+}
