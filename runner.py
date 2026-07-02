@@ -1,7 +1,9 @@
 from pathlib import Path
+import argparse
 import json
+import sys
 from datetime import datetime, timezone
-from state_machine import transition_task
+from state_machine import transition_task, validate_transition
 
 ROOT = Path(".")
 PENDING = ROOT / "tasks" / "pending"
@@ -67,6 +69,17 @@ def find_task():
 
     legacy_tasks = sorted(PENDING.glob("*.json"))
     return legacy_tasks[0] if legacy_tasks else None
+
+
+def find_needs_revision_task(task_id):
+    contract_task = NEEDS_REVISION / task_id
+    if (contract_task / "task.json").exists():
+        return contract_task
+
+    legacy_task = NEEDS_REVISION / f"{task_id}.json"
+    if legacy_task.exists():
+        return legacy_task
+    return None
 
 def task_json_path(task_path):
     if task_path.is_dir():
@@ -156,7 +169,105 @@ def write_task_report(task_id, title, status, review_result):
     )
     return report
 
-def main():
+
+def append_requeue_report(task_id, requeue_details):
+    report = REPORTS / f"{task_id}.md"
+    if report.exists():
+        current = report.read_text(encoding="utf-8").rstrip()
+    else:
+        current = f"# Task Report: {task_id}"
+    section = (
+        f"\n\n## Requeue\n"
+        f"- Revision count: {requeue_details['revision_count']}\n"
+        f"- Reason: {requeue_details['reason']}\n"
+        f"- Source: {requeue_details['source']}\n"
+        f"- Destination: {requeue_details['destination']}\n"
+        f"- Requeued at: {requeue_details['timestamp']}\n"
+    )
+    report.write_text(current + section, encoding="utf-8")
+    return report
+
+
+def display_path(path):
+    path = Path(path)
+    try:
+        return str(path.relative_to(ROOT))
+    except ValueError:
+        return str(path)
+
+
+def current_task_state(task_path, data):
+    if data and data.get("status"):
+        return data["status"]
+    return Path(task_path).parent.name
+
+
+def prepare_requeue_metadata(task_path, reason):
+    json_path = task_json_path(task_path)
+    data, errors = load_task(json_path)
+    if errors:
+        raise ValueError("; ".join(errors))
+    if data is None:
+        raise ValueError(f"task.json not found: {json_path}")
+
+    validate_transition(current_task_state(task_path, data), "pending")
+
+    timestamp = now()
+    revision_count = int(data.get("revision_count") or 0) + 1
+    history = data.get("revision_history") or []
+    if not isinstance(history, list):
+        history = []
+
+    source = display_path(task_path)
+    history_entry = {
+        "revision_count": revision_count,
+        "reason": reason,
+        "timestamp": timestamp,
+        "source": source,
+        "from": "needs_revision",
+        "to": "pending",
+    }
+    history.append(history_entry)
+
+    data["revision_count"] = revision_count
+    data["last_revision_reason"] = reason
+    data["last_requeued_at"] = timestamp
+    data["revision_history"] = history
+    json_path.write_text(
+        json.dumps(data, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    return data, history_entry
+
+
+def requeue_task(task_path, reason):
+    task_path = Path(task_path)
+    task_id = task_id_from_path(task_path)
+    log_event("task_requeue_started", task_id, {"path": display_path(task_path), "reason": reason})
+    try:
+        data, history_entry = prepare_requeue_metadata(task_path, reason)
+        task_id = data.get("id") or task_id
+        destination = transition_task(task_path, "pending", log_event, task_id=task_id)
+        details = {
+            "source": history_entry["source"],
+            "destination": str(destination),
+            "reason": reason,
+            "revision_count": history_entry["revision_count"],
+            "timestamp": history_entry["timestamp"],
+        }
+        report = append_requeue_report(task_id, details)
+        details["report"] = str(report)
+        log_event("task_requeued", task_id, details)
+        return destination
+    except Exception as exc:
+        log_event(
+            "task_requeue_failed",
+            task_id,
+            {"path": display_path(task_path), "reason": reason, "error": str(exc)},
+        )
+        raise
+
+def ensure_directories():
     for directory in (
         PENDING,
         RUNNING,
@@ -169,6 +280,47 @@ def main():
         ERROR_LOG_DIR,
     ):
         directory.mkdir(parents=True, exist_ok=True)
+
+
+def parse_args(argv=None):
+    parser = argparse.ArgumentParser(description="Task Cell Harness runner")
+    parser.add_argument(
+        "--requeue",
+        metavar="TASK_ID",
+        help="move a task from needs_revision back to pending",
+    )
+    parser.add_argument(
+        "--reason",
+        default="Requeued after revision",
+        help="reason stored in revision metadata when using --requeue",
+    )
+    return parser.parse_args(argv)
+
+
+def run_requeue(task_id, reason):
+    task = find_needs_revision_task(task_id)
+    if task is None:
+        log_event(
+            "task_requeue_failed",
+            task_id,
+            {
+                "path": str(NEEDS_REVISION / task_id),
+                "reason": reason,
+                "error": "task not found in needs_revision",
+            },
+        )
+        raise FileNotFoundError(f"task not found in needs_revision: {task_id}")
+    destination = requeue_task(task, reason)
+    print(f"Task requeued: {task_id}")
+    return destination
+
+
+def main(argv=None):
+    args = parse_args(argv or [])
+    ensure_directories()
+
+    if args.requeue:
+        return run_requeue(args.requeue, args.reason)
 
     task = find_task()
     if not task:
@@ -236,4 +388,4 @@ def main():
     return final_task
 
 if __name__ == "__main__":
-    main()
+    main(sys.argv[1:])
