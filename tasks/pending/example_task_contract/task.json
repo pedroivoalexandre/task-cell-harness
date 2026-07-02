@@ -1,0 +1,19 @@
+{
+  "id": "example_task_contract",
+  "title": "Example official task contract",
+  "status": "pending",
+  "objective": "Validate the official task.json contract flow without calling external agents.",
+  "created_at": "2026-07-02T00:00:00+00:00",
+  "priority": "normal",
+  "role": "harness",
+  "description": "Example task used by TASK-002 to prove that directory-based task.json files are accepted by the runner.",
+  "acceptance_criteria": [
+    "The runner prefers this task.json over legacy pending JSON files.",
+    "The task passes minimum contract validation.",
+    "The runner creates logs and a Markdown report."
+  ],
+  "constraints": [
+    "Do not call Gemini as a subprocess.",
+    "Do not call Codex as a subprocess."
+  ]
+}
