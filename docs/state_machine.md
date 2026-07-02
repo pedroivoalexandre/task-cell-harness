@@ -65,3 +65,35 @@ an `updated_at` timestamp.
 
 Legacy JSON tasks without an explicit `status` use their directory state as the
 current state and are still moved through the same transition checks.
+
+## Simulated review flow
+
+The runner currently uses a local simulated review step and does not call Gemini
+or Codex as subprocesses.
+
+Current successful execution flow:
+
+```text
+pending -> running -> review -> done
+```
+
+Revision flow:
+
+```text
+pending -> running -> review -> needs_revision
+```
+
+The state machine also permits returning revised work to the queue:
+
+```text
+needs_revision -> pending
+```
+
+The simulated review reads `task.json` and decides:
+
+- `done` when `acceptance_criteria` exists and is not empty.
+- `needs_revision` when the task is structurally valid but has no
+  `acceptance_criteria`.
+- `failed` when structural validation errors are present.
+
+Reports include a `Review` section with the simulated decision and summary.

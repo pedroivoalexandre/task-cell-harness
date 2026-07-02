@@ -94,14 +94,63 @@ def load_task(path):
         return None, [f"invalid JSON: {exc.msg} at line {exc.lineno}, column {exc.colno}"]
     return data, []
 
-def write_failure_report(task_id, title, errors):
+def validate_running_task(task_path, pre_transition_data=None, pre_transition_errors=None):
+    data_path = task_json_path(task_path)
+    data, errors = load_task(data_path)
+    pre_transition_errors = pre_transition_errors or []
+    if task_path.is_dir():
+        if pre_transition_errors:
+            return pre_transition_data, list(pre_transition_errors)
+        if data:
+            errors.extend(validate_task_contract(data))
+        return data, errors
+    return data, errors
+
+
+def simulated_review(task_path, structural_errors=None):
+    review_data, read_errors = load_task(task_json_path(task_path))
+    structural_errors = structural_errors or []
+    if structural_errors:
+        return {
+            "decision": "failed",
+            "summary": "Structural task errors prevent completion.",
+            "errors": structural_errors,
+        }
+    if read_errors:
+        return {
+            "decision": "failed",
+            "summary": "Review could not read task.json.",
+            "errors": read_errors,
+        }
+    acceptance_criteria = review_data.get("acceptance_criteria") if review_data else None
+    if acceptance_criteria:
+        return {
+            "decision": "done",
+            "summary": "Acceptance criteria are present; simulated review approved.",
+            "errors": [],
+        }
+    return {
+        "decision": "needs_revision",
+        "summary": "Task needs acceptance_criteria before completion.",
+        "errors": ["missing or empty acceptance_criteria"],
+    }
+
+
+def write_task_report(task_id, title, status, review_result):
     report = REPORTS / f"{task_id}.md"
+    errors = review_result.get("errors") or []
+    error_section = ""
+    if errors:
+        error_section = "- Errors:\n" + "".join(f"  - {error}\n" for error in errors)
     report.write_text(
         f"# Task Report: {task_id}\n\n"
         f"## Title\n{title or ''}\n\n"
-        f"## Status\nFailed\n\n"
-        f"## Errors\n"
-        + "".join(f"- {error}\n" for error in errors)
+        f"## Status\n{status}\n\n"
+        f"## Notes\nFake task executed without calling external agents.\n\n"
+        f"## Review\n"
+        f"- Decision: {review_result.get('decision')}\n"
+        f"- Summary: {review_result.get('summary')}\n"
+        + error_section
         + f"\n## Finished at\n{now()}\n",
         encoding="utf-8"
     )
@@ -139,44 +188,52 @@ def main():
     log_event("task_found", task_id, {"path": str(task)})
     running_task = transition_task(task, "running", log_event, task_id=task_id)
 
-    data_path = task_json_path(running_task)
-    data, errors = load_task(data_path)
-    if running_task.is_dir():
-        if pre_transition_errors:
-            errors = pre_transition_errors
-            data = pre_transition_data
-        elif data:
-            task_id = data.get("id") or task_id
-            errors.extend(validate_task_contract(data))
-        if errors:
-            log_error(task_id, errors, data_path)
-            report = write_failure_report(
-                task_id,
-                data.get("title") if data else "",
-                errors,
-            )
-            log_event("failure_report_created", task_id, {"path": str(report)})
-            transition_task(running_task, "failed", log_event, task_id=task_id)
-            print(f"Task failed validation: {task_id}")
-            return
-    elif errors:
-        raise ValueError("; ".join(errors))
-
-    log_event("task_started", task_id, {"title": data.get("title")})
-
-    report = REPORTS / f"{task_id}.md"
-    report.write_text(
-        f"# Task Report: {task_id}\n\n"
-        f"## Title\n{data.get('title', '')}\n\n"
-        f"## Status\nDone\n\n"
-        f"## Notes\nFake task executed without calling external agents.\n\n"
-        f"## Finished at\n{now()}\n",
-        encoding="utf-8"
+    data, structural_errors = validate_running_task(
+        running_task,
+        pre_transition_data=pre_transition_data,
+        pre_transition_errors=pre_transition_errors,
     )
-    log_event("report_created", task_id, {"path": str(report)})
+    if data:
+        task_id = data.get("id") or task_id
+    elif not structural_errors:
+        raise ValueError("task data could not be loaded")
 
-    transition_task(running_task, "done", log_event, task_id=task_id)
-    print(f"Task completed: {task_id}")
+    log_event("task_started", task_id, {"title": data.get("title") if data else ""})
+    review_task = transition_task(running_task, "review", log_event, task_id=task_id)
+
+    log_event(
+        "simulated_review_started",
+        task_id,
+        {"path": str(task_json_path(review_task))},
+    )
+    review_result = simulated_review(review_task, structural_errors)
+    log_event("simulated_review_completed", task_id, review_result)
+
+    decision = review_result["decision"]
+    status_title = {
+        "done": "Done",
+        "needs_revision": "Needs Revision",
+        "failed": "Failed",
+    }[decision]
+    report = write_task_report(
+        task_id,
+        data.get("title") if data else "",
+        status_title,
+        review_result,
+    )
+    log_event("report_created", task_id, {"path": str(report), "review_decision": decision})
+
+    if decision == "failed":
+        log_error(task_id, review_result["errors"], task_json_path(review_task))
+
+    final_task = transition_task(review_task, decision, log_event, task_id=task_id)
+    if decision == "done":
+        print(f"Task completed: {task_id}")
+    elif decision == "needs_revision":
+        print(f"Task needs revision: {task_id}")
+    else:
+        print(f"Task failed review: {task_id}")
+    return final_task
 
 if __name__ == "__main__":
     main()
