@@ -1,10 +1,13 @@
 from pathlib import Path
-import json, shutil
+import json
 from datetime import datetime, timezone
+from state_machine import transition_task
 
 ROOT = Path(".")
 PENDING = ROOT / "tasks" / "pending"
 RUNNING = ROOT / "tasks" / "running"
+REVIEW = ROOT / "tasks" / "review"
+NEEDS_REVISION = ROOT / "tasks" / "needs_revision"
 DONE = ROOT / "tasks" / "done"
 FAILED = ROOT / "tasks" / "failed"
 REPORTS = ROOT / "reports"
@@ -54,11 +57,6 @@ def log_error(task_id, errors, path):
         f.write(json.dumps(record, ensure_ascii=False) + "\n")
     log_event("task_validation_failed", task_id, record["details"])
 
-def unique_destination(path):
-    if not path.exists():
-        return path
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
-    return path.with_name(f"{path.stem}_{timestamp}{path.suffix}")
 
 def find_task():
     contract_tasks = sorted(
@@ -110,7 +108,17 @@ def write_failure_report(task_id, title, errors):
     return report
 
 def main():
-    for directory in (PENDING, RUNNING, DONE, FAILED, REPORTS, TASK_LOG_DIR, ERROR_LOG_DIR):
+    for directory in (
+        PENDING,
+        RUNNING,
+        REVIEW,
+        NEEDS_REVISION,
+        DONE,
+        FAILED,
+        REPORTS,
+        TASK_LOG_DIR,
+        ERROR_LOG_DIR,
+    ):
         directory.mkdir(parents=True, exist_ok=True)
 
     task = find_task()
@@ -120,16 +128,24 @@ def main():
         return
 
     task_id = task_id_from_path(task)
-    running_task = unique_destination(RUNNING / task.name)
+    pre_transition_data = None
+    pre_transition_errors = []
+    if task.is_dir():
+        pre_transition_data, pre_transition_errors = load_task(task_json_path(task))
+        if pre_transition_data:
+            task_id = pre_transition_data.get("id") or task_id
+            pre_transition_errors.extend(validate_task_contract(pre_transition_data))
 
     log_event("task_found", task_id, {"path": str(task)})
-    shutil.move(str(task), str(running_task))
-    log_event("task_moved_to_running", task_id, {"path": str(running_task)})
+    running_task = transition_task(task, "running", log_event, task_id=task_id)
 
     data_path = task_json_path(running_task)
     data, errors = load_task(data_path)
     if running_task.is_dir():
-        if data:
+        if pre_transition_errors:
+            errors = pre_transition_errors
+            data = pre_transition_data
+        elif data:
             task_id = data.get("id") or task_id
             errors.extend(validate_task_contract(data))
         if errors:
@@ -140,9 +156,7 @@ def main():
                 errors,
             )
             log_event("failure_report_created", task_id, {"path": str(report)})
-            failed_task = unique_destination(FAILED / running_task.name)
-            shutil.move(str(running_task), str(failed_task))
-            log_event("task_moved_to_failed", task_id, {"path": str(failed_task)})
+            transition_task(running_task, "failed", log_event, task_id=task_id)
             print(f"Task failed validation: {task_id}")
             return
     elif errors:
@@ -161,9 +175,7 @@ def main():
     )
     log_event("report_created", task_id, {"path": str(report)})
 
-    done_task = unique_destination(DONE / running_task.name)
-    shutil.move(str(running_task), str(done_task))
-    log_event("task_moved_to_done", task_id, {"path": str(done_task)})
+    transition_task(running_task, "done", log_event, task_id=task_id)
     print(f"Task completed: {task_id}")
 
 if __name__ == "__main__":
