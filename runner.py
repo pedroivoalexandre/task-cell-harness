@@ -3,6 +3,7 @@ import argparse
 import json
 import sys
 from datetime import datetime, timezone
+from scheduler import attempts_exhausted, increment_attempt_count, select_next_task
 from state_machine import transition_task, validate_transition
 
 ROOT = Path(".")
@@ -61,14 +62,8 @@ def log_error(task_id, errors, path):
 
 
 def find_task():
-    contract_tasks = sorted(
-        task_json.parent for task_json in PENDING.glob("*/task.json")
-    )
-    if contract_tasks:
-        return contract_tasks[0]
-
-    legacy_tasks = sorted(PENDING.glob("*.json"))
-    return legacy_tasks[0] if legacy_tasks else None
+    selected = select_next_task(PENDING)
+    return selected["path"] if selected else None
 
 
 def find_needs_revision_task(task_id):
@@ -166,6 +161,22 @@ def write_task_report(task_id, title, status, review_result):
         + error_section
         + f"\n## Finished at\n{now()}\n",
         encoding="utf-8"
+    )
+    return report
+
+
+def write_attempt_failure_report(task_id, title, attempt_count, max_attempts):
+    report = REPORTS / f"{task_id}.md"
+    report.write_text(
+        f"# Task Report: {task_id}\n\n"
+        f"## Title\n{title or ''}\n\n"
+        f"## Status\nFailed\n\n"
+        f"## Scheduler\n"
+        f"- Reason: max_attempts reached before running.\n"
+        f"- Attempt count: {attempt_count}\n"
+        f"- Max attempts: {max_attempts}\n"
+        f"\n## Finished at\n{now()}\n",
+        encoding="utf-8",
     )
     return report
 
@@ -331,11 +342,63 @@ def main(argv=None):
     task_id = task_id_from_path(task)
     pre_transition_data = None
     pre_transition_errors = []
-    if task.is_dir():
-        pre_transition_data, pre_transition_errors = load_task(task_json_path(task))
+    scheduler_data, scheduler_errors = load_task(task_json_path(task))
+    if scheduler_data:
+        task_id = scheduler_data.get("id") or task_id
+
+    if scheduler_errors:
+        pre_transition_errors = scheduler_errors
+    elif task.is_dir():
+        pre_transition_data = scheduler_data
         if pre_transition_data:
-            task_id = pre_transition_data.get("id") or task_id
             pre_transition_errors.extend(validate_task_contract(pre_transition_data))
+
+    log_event(
+        "task_selected",
+        task_id,
+        {
+            "path": str(task),
+            "priority": scheduler_data.get("priority") if scheduler_data else None,
+            "created_at": scheduler_data.get("created_at") if scheduler_data else None,
+            "revision_count": scheduler_data.get("revision_count", 0) if scheduler_data else 0,
+            "attempt_count": scheduler_data.get("attempt_count", 0) if scheduler_data else 0,
+            "max_attempts": scheduler_data.get("max_attempts", 3) if scheduler_data else 3,
+        },
+    )
+
+    if scheduler_data and attempts_exhausted(scheduler_data):
+        details = {
+            "path": str(task),
+            "attempt_count": scheduler_data.get("attempt_count", 0),
+            "max_attempts": scheduler_data.get("max_attempts", 3),
+        }
+        log_event("task_max_attempts_exceeded", task_id, details)
+        report = write_attempt_failure_report(
+            task_id,
+            scheduler_data.get("title", ""),
+            details["attempt_count"],
+            details["max_attempts"],
+        )
+        log_event("report_created", task_id, {"path": str(report), "reason": "max_attempts"})
+        running_exhausted_task = transition_task(task, "running", log_event, task_id=task_id)
+        transition_task(running_exhausted_task, "failed", log_event, task_id=task_id)
+        print(f"Task failed max attempts: {task_id}")
+        return
+
+    updated_data, attempt_errors = increment_attempt_count(task)
+    if attempt_errors:
+        pre_transition_errors.extend(attempt_errors)
+    elif updated_data:
+        scheduler_data = updated_data
+        pre_transition_data = updated_data if task.is_dir() else pre_transition_data
+        log_event(
+            "task_attempt_incremented",
+            task_id,
+            {
+                "attempt_count": updated_data.get("attempt_count"),
+                "max_attempts": updated_data.get("max_attempts"),
+            },
+        )
 
     log_event("task_found", task_id, {"path": str(task)})
     running_task = transition_task(task, "running", log_event, task_id=task_id)

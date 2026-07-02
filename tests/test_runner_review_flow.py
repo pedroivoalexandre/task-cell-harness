@@ -137,6 +137,62 @@ class RunnerReviewFlowTests(unittest.TestCase):
             self.assertEqual(transitions, ["running", "review", "failed"])
             self.assertTrue((root / "logs" / "errors" / "review_failed.jsonl").exists())
 
+    def test_attempt_count_increments_when_task_is_selected(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            configure_runner_root(root)
+            write_task(
+                root,
+                "attempt_increment",
+                {
+                    "acceptance_criteria": ["Review can approve this task."],
+                    "attempt_count": 1,
+                    "max_attempts": 3,
+                },
+            )
+
+            runner.main()
+
+            task_json = root / "tasks" / "done" / "attempt_increment" / "task.json"
+            data = json.loads(task_json.read_text(encoding="utf-8"))
+            self.assertEqual(data["attempt_count"], 2)
+            self.assertEqual(data["max_attempts"], 3)
+
+            events = read_events(root, "attempt_increment")
+            self.assertIn("task_attempt_incremented", [event["event"] for event in events])
+
+    def test_task_at_max_attempts_moves_to_failed_without_review(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            configure_runner_root(root)
+            write_task(
+                root,
+                "max_attempts_task",
+                {
+                    "acceptance_criteria": ["Would otherwise pass."],
+                    "attempt_count": 3,
+                    "max_attempts": 3,
+                },
+            )
+
+            runner.main()
+
+            task_json = root / "tasks" / "failed" / "max_attempts_task" / "task.json"
+            data = json.loads(task_json.read_text(encoding="utf-8"))
+            self.assertEqual(data["status"], "failed")
+            self.assertEqual(data["attempt_count"], 3)
+
+            report = (root / "reports" / "max_attempts_task.md").read_text(
+                encoding="utf-8"
+            )
+            self.assertIn("## Scheduler", report)
+            self.assertIn("- Reason: max_attempts reached before running.", report)
+
+            events = read_events(root, "max_attempts_task")
+            event_names = [event["event"] for event in events]
+            self.assertIn("task_max_attempts_exceeded", event_names)
+            self.assertNotIn("simulated_review_started", event_names)
+
 
 if __name__ == "__main__":
     unittest.main()
