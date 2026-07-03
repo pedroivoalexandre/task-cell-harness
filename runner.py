@@ -3,7 +3,18 @@ import argparse
 import json
 import sys
 from datetime import datetime, timezone
-from scheduler import attempts_exhausted, increment_attempt_count, select_next_task
+from scheduler import (
+    attempt_count,
+    attempts_exhausted,
+    discover_pending_tasks,
+    increment_attempt_count,
+    load_task_data,
+    max_attempts,
+    numeric_field,
+    queue_timestamp,
+    scheduling_key,
+    select_next_task,
+)
 from state_machine import transition_task, validate_transition
 
 ROOT = Path(".")
@@ -17,6 +28,14 @@ REPORTS = ROOT / "reports"
 HARNESS_LOG = ROOT / "logs" / "harness.log"
 TASK_LOG_DIR = ROOT / "logs" / "tasks"
 ERROR_LOG_DIR = ROOT / "logs" / "errors"
+QUEUE_STATES = (
+    "pending",
+    "running",
+    "review",
+    "needs_revision",
+    "failed",
+    "done",
+)
 REQUIRED_TASK_JSON_FIELDS = (
     "id",
     "title",
@@ -66,6 +85,17 @@ def find_task():
     return selected["path"] if selected else None
 
 
+def state_directories():
+    return {
+        "pending": PENDING,
+        "running": RUNNING,
+        "review": REVIEW,
+        "needs_revision": NEEDS_REVISION,
+        "failed": FAILED,
+        "done": DONE,
+    }
+
+
 def find_needs_revision_task(task_id):
     contract_task = NEEDS_REVISION / task_id
     if (contract_task / "task.json").exists():
@@ -85,6 +115,123 @@ def task_id_from_path(task_path):
     if task_path.is_dir():
         return task_path.name
     return task_path.stem
+
+
+def discover_state_tasks(state, state_dir):
+    state_dir = Path(state_dir)
+    if state == "pending":
+        candidates = []
+        for task_path in discover_pending_tasks(state_dir):
+            data, errors = load_task_data(task_path)
+            candidates.append(
+                {
+                    "path": task_path,
+                    "id": data.get("id") or task_id_from_path(task_path),
+                    "data": data,
+                    "errors": errors,
+                }
+            )
+        return sorted(candidates, key=scheduling_key)
+
+    contract_tasks = sorted(task_json.parent for task_json in state_dir.glob("*/task.json"))
+    legacy_tasks = sorted(state_dir.glob("*.json"))
+    tasks = []
+    for task_path in contract_tasks + legacy_tasks:
+        data, errors = load_task_data(task_path)
+        tasks.append(
+            {
+                "path": task_path,
+                "id": data.get("id") or task_id_from_path(task_path),
+                "data": data,
+                "errors": errors,
+            }
+        )
+    return tasks
+
+
+def task_status_summary(candidate, fallback_state):
+    data = candidate["data"]
+    summary = {
+        "id": data.get("id") or candidate["id"],
+        "title": data.get("title") or "",
+        "priority": data.get("priority") or "normal",
+        "status": data.get("status") or fallback_state,
+        "revision_count": numeric_field(data, "revision_count"),
+        "attempt_count": attempt_count(data),
+        "max_attempts": max_attempts(data),
+        "created_at": data.get("created_at") or "",
+    }
+    if data.get("last_requeued_at"):
+        summary["last_requeued_at"] = data["last_requeued_at"]
+    return summary
+
+
+def format_task_summary(candidate, fallback_state):
+    summary = task_status_summary(candidate, fallback_state)
+    lines = [
+        f"- id: {summary['id']}",
+        f"  title: {summary['title']}",
+        f"  priority: {summary['priority']}",
+        f"  status: {summary['status']}",
+        f"  revision_count: {summary['revision_count']}",
+        f"  attempt_count: {summary['attempt_count']}",
+        f"  max_attempts: {summary['max_attempts']}",
+        f"  created_at: {summary['created_at']}",
+    ]
+    if "last_requeued_at" in summary:
+        lines.append(f"  last_requeued_at: {summary['last_requeued_at']}")
+    return lines
+
+
+def format_next_task(candidate):
+    if candidate is None:
+        return ["Next task:", "- none"]
+
+    data = candidate["data"]
+    summary = task_status_summary(candidate, "pending")
+    queue_value = queue_timestamp(data).isoformat()
+    return [
+        "Next task:",
+        f"- id: {summary['id']}",
+        f"- title: {summary['title']}",
+        f"- priority: {summary['priority']}",
+        f"- attempts: {summary['attempt_count']}/{summary['max_attempts']}",
+        (
+            "- reason/order basis: "
+            f"priority={summary['priority']}, "
+            f"queue_timestamp={queue_value}, "
+            f"revision_count={summary['revision_count']}, "
+            f"id={summary['id']}"
+        ),
+    ]
+
+
+def build_queue_status_lines():
+    lines = ["Queue status"]
+    all_tasks = {}
+    for state, directory in state_directories().items():
+        all_tasks[state] = discover_state_tasks(state, directory)
+
+    for state in QUEUE_STATES:
+        lines.append("")
+        lines.append(f"{state}:")
+        tasks = all_tasks[state]
+        if not tasks:
+            lines.append("- none")
+            continue
+        for candidate in tasks:
+            lines.extend(format_task_summary(candidate, state))
+
+    lines.append("")
+    next_task = all_tasks["pending"][0] if all_tasks["pending"] else None
+    lines.extend(format_next_task(next_task))
+    return lines
+
+
+def run_status():
+    output = "\n".join(build_queue_status_lines())
+    print(output)
+    return output
 
 def validate_task_contract(data):
     errors = []
@@ -301,6 +448,12 @@ def parse_args(argv=None):
         help="move a task from needs_revision back to pending",
     )
     parser.add_argument(
+        "command",
+        nargs="?",
+        choices=("status",),
+        help="inspect the task queue without executing tasks",
+    )
+    parser.add_argument(
         "--reason",
         default="Requeued after revision",
         help="reason stored in revision metadata when using --requeue",
@@ -328,6 +481,10 @@ def run_requeue(task_id, reason):
 
 def main(argv=None):
     args = parse_args(argv or [])
+
+    if args.command == "status":
+        return run_status()
+
     ensure_directories()
 
     if args.requeue:
