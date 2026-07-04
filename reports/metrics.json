@@ -1,0 +1,11 @@
+{
+  "tasks_processed": 0,
+  "tasks_done": 0,
+  "tasks_failed": 0,
+  "tasks_needs_revision": 0,
+  "executor_success_count": 0,
+  "executor_failure_count": 0,
+  "average_execution_time": 0,
+  "attempts_total": 0,
+  "requeues_total": 0
+}

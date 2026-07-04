@@ -19,6 +19,15 @@ class ResourceManagerTests(unittest.TestCase):
             self.assertTrue(manager.cleanup_execution(context))
             self.assertFalse(workspace.exists())
 
+    def test_prepare_refuses_path_traversal(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            context = ExecutionContext.create({"id": "resource_task"})
+            context.execution_id = "../escape"
+            manager = ResourceManager(root / "runtime", project_root=root)
+            with self.assertRaises(ValueError):
+                manager.prepare_execution(context)
+
     def test_cleanup_refuses_outside_path(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

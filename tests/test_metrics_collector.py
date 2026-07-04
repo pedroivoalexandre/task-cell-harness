@@ -3,7 +3,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from event_bus import Event, EventBus
+from event_bus import EventBus
+from events import ExecutorCompleted, TaskSelected, TaskStateTransitioned
 from metrics_collector import MetricsCollector
 
 
@@ -14,9 +15,9 @@ class MetricsCollectorTests(unittest.TestCase):
             bus = EventBus()
             collector = MetricsCollector(output)
             bus.subscribe("*", collector.handle_event)
-            bus.emit(Event("task_selected", {"details": {}}))
-            bus.emit(Event("executor_completed", {"details": {}}))
-            bus.emit(Event("task_state_transition", {"details": {"to": "done"}}))
+            bus.emit(TaskSelected(payload={"task_id": "t1"}))
+            bus.emit(ExecutorCompleted(payload={"task_id": "t1"}))
+            bus.emit(TaskStateTransitioned(payload={"task_id": "t1", "to": "done"}))
 
             data = json.loads(output.read_text(encoding="utf-8"))
             self.assertEqual(data["tasks_processed"], 1)

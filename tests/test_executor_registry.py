@@ -7,6 +7,7 @@ from unittest.mock import patch
 import runner
 from executor_registry import ExecutorRegistry
 from executors.mock import MockExecutor
+from runtime_config import RuntimeConfig
 
 
 def write_config(root, data):
@@ -144,6 +145,32 @@ class ExecutorRegistryTests(unittest.TestCase):
             self.assertTrue(resolved["fallback"])
             self.assertTrue(result["success"])
             popen.assert_not_called()
+
+    def test_real_executor_is_policy_blocked_without_runtime_flag(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            config = write_config(
+                root,
+                {
+                    "executors": {
+                        "codex_real": {
+                            "type": "real",
+                            "role": "developer",
+                            "command": "codex",
+                            "enabled": True,
+                        }
+                    }
+                },
+            )
+
+            registry = ExecutorRegistry(config).load()
+            resolved = registry.resolve(name="codex_real", task={"id": "t_real"}, runtime_config=RuntimeConfig())
+
+            self.assertFalse(resolved["fallback"])
+            self.assertTrue(resolved["blocked"])
+            self.assertEqual(resolved["kind"], "real")
+            self.assertFalse(resolved["policy"]["allowed"])
+            self.assertFalse(resolved["executor"].execute({"id": "t_real"}, {"task_id": "t_real"})["success"])
 
     def test_runner_uses_registry_and_logs_resolution(self):
         with tempfile.TemporaryDirectory() as temp_dir:

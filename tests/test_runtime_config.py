@@ -26,6 +26,18 @@ class RuntimeConfigTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             RuntimeConfig(execution_mode="real", enable_real_executors=False).validate()
 
+    def test_allows_real_executor_only_with_feature_flag(self):
+        config = RuntimeConfig(
+            execution_mode="real",
+            dry_run=False,
+            enable_real_executors=True,
+            feature_flags={"real_executors": {"codex_s10": True}},
+        )
+        config.validate()
+        self.assertTrue(config.allows_real_execution())
+        self.assertTrue(config.allows_real_executor("codex_s10"))
+        self.assertFalse(config.allows_real_executor("gemini_s10"))
+
 
 if __name__ == "__main__":
     unittest.main()

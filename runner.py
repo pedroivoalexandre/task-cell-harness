@@ -5,7 +5,8 @@ import sys
 from datetime import datetime, timezone
 from artifact_manager import ArtifactManager
 from execution_context import ExecutionContext
-from event_bus import Event, EventBus
+from event_bus import EventBus
+from events import event_from_name
 from metrics_collector import MetricsCollector
 from executor_registry import load_executor_registry
 from report_builder import ReportBuilder
@@ -75,54 +76,71 @@ def initialize_runtime_services():
     METRICS = MetricsCollector(REPORTS / "metrics.json")
     RESOURCE_MANAGER = ResourceManager(ROOT / "runtime", project_root=ROOT)
     RESOURCE_MANAGER.ensure_directories()
+    EVENT_BUS.subscribe("*", _write_runtime_log_event)
+    EVENT_BUS.subscribe("task_validation_failed", _write_error_log_event)
     EVENT_BUS.subscribe("*", METRICS.handle_event)
 
+def _write_jsonl_record(path, record):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(record, ensure_ascii=False) + chr(10))
+
+
+def _write_runtime_log_event(event):
+    record = event.to_record()
+    _write_jsonl_record(HARNESS_LOG, record)
+    if event.task_id:
+        _write_jsonl_record(TASK_LOG_DIR / f"{event.task_id}.jsonl", record)
+
+
+def _write_error_log_event(event):
+    _write_jsonl_record(ERROR_LOG_DIR / f"{event.task_id or event.event_id}.jsonl", event.to_record())
+
+
+def _coerce_runtime_event(event, task_id=None, details=None, execution_context=None):
+    payload = dict(details or {})
+    if execution_context is not None:
+        payload.setdefault("execution_id", execution_context.execution_id)
+        payload.setdefault("execution_context", execution_context.log_fields())
+    if hasattr(event, "event_type") and hasattr(event, "to_record"):
+        runtime_event = event
+        if payload:
+            runtime_event.payload.update(payload)
+        if execution_context is not None:
+            runtime_event.execution_id = runtime_event.execution_id or execution_context.execution_id
+            runtime_event.task_id = runtime_event.task_id or task_id or execution_context.task_id
+        elif task_id:
+            runtime_event.task_id = runtime_event.task_id or task_id
+        return runtime_event
+    execution_id = payload.get("execution_id") or (execution_context.execution_id if execution_context else "")
+    inferred_task_id = task_id or payload.get("task_id") or (execution_context.task_id if execution_context else "")
+    return event_from_name(
+        event,
+        payload=payload,
+        execution_id=execution_id or "",
+        task_id=inferred_task_id or "",
+    )
 
 def now():
     return datetime.now(timezone.utc).isoformat()
 
 def log_event(event, task_id=None, details=None, execution_context=None):
-    TASK_LOG_DIR.mkdir(parents=True, exist_ok=True)
-    HARNESS_LOG.parent.mkdir(parents=True, exist_ok=True)
-    details = dict(details or {})
-    if execution_context is not None:
-        details.setdefault("execution_id", execution_context.execution_id)
-        details.setdefault("execution_context", execution_context.log_fields())
-    record = {
-        "timestamp": now(),
-        "event": event,
-        "task_id": task_id,
-        "details": details
-    }
-    if execution_context is not None:
-        record["execution_id"] = execution_context.execution_id
-    with HARNESS_LOG.open("a", encoding="utf-8") as f:
-        f.write(json.dumps(record, ensure_ascii=False) + "\n")
-    if task_id:
-        with (TASK_LOG_DIR / f"{task_id}.jsonl").open("a", encoding="utf-8") as f:
-            f.write(json.dumps(record, ensure_ascii=False) + "\n")
-    EVENT_BUS.emit(Event(event, record))
+    runtime_event = _coerce_runtime_event(
+        event,
+        task_id=task_id,
+        details=details,
+        execution_context=execution_context,
+    )
+    EVENT_BUS.emit(runtime_event)
+    return runtime_event
+
 
 def log_error(task_id, errors, path, execution_context=None):
-    ERROR_LOG_DIR.mkdir(parents=True, exist_ok=True)
     details = {
         "path": str(path),
         "errors": errors,
     }
-    if execution_context is not None:
-        details.setdefault("execution_id", execution_context.execution_id)
-        details.setdefault("execution_context", execution_context.log_fields())
-    record = {
-        "timestamp": now(),
-        "event": "task_validation_failed",
-        "task_id": task_id,
-        "details": details,
-    }
-    if execution_context is not None:
-        record["execution_id"] = execution_context.execution_id
-    with (ERROR_LOG_DIR / f"{task_id}.jsonl").open("a", encoding="utf-8") as f:
-        f.write(json.dumps(record, ensure_ascii=False) + "\n")
-    log_event("task_validation_failed", task_id, record["details"], execution_context=execution_context)
+    log_event("task_validation_failed", task_id, details, execution_context=execution_context)
 
 
 def log_event_with_context(execution_context):
@@ -382,14 +400,18 @@ def resolve_executor_for_task(task_id, task_data, execution_context=None):
         name=request["name"],
         role=request["role"],
         task=task_data or {},
+        runtime_config=CURRENT_RUNTIME_CONFIG,
     )
     config = resolution["config"]
     details = {
         "requested_name": request["name"],
         "requested_role": request["role"],
-        "resolved_name": config.get("name"),
-        "resolved_role": config.get("role"),
+        "resolved_name": config.get("name") if config else None,
+        "resolved_role": config.get("role") if config else None,
         "reason": resolution["reason"],
+        "kind": resolution.get("kind"),
+        "blocked": resolution.get("blocked", False),
+        "policy": resolution.get("policy", {}),
     }
     if execution_context is not None:
         execution_context.update(
@@ -399,6 +421,13 @@ def resolve_executor_for_task(task_id, task_data, execution_context=None):
     if resolution["fallback"]:
         log_event(
             "executor_fallback_used",
+            task_id,
+            details,
+            execution_context=execution_context,
+        )
+    if resolution.get("blocked"):
+        log_event(
+            "executor_policy_blocked",
             task_id,
             details,
             execution_context=execution_context,
@@ -418,6 +447,7 @@ def execute_task_with_executor(task_id, task_data, task_path, execution_context=
         "task_path": display_path(task_path),
         "executor_resolution": resolution_details,
         "execution_context": execution_context,
+        "artifact_root": artifact_root_path(),
     }
     details = {
         "executor": executor.name,
@@ -425,6 +455,21 @@ def execute_task_with_executor(task_id, task_data, task_path, execution_context=
         "path": context["task_path"],
     }
     log_event("executor_started", task_id, details, execution_context=execution_context)
+    if executor is None:
+        failure_message = "executor resolution returned no executable instance"
+        log_event(
+            "executor_failed",
+            task_id,
+            {**details, "success": False, "error": failure_message},
+            execution_context=execution_context,
+        )
+        return {
+            "success": False,
+            "executor": None,
+            "role": None,
+            "output": "",
+            "error": failure_message,
+        }
     try:
         result = executor.execute(task_data or {}, context)
     except Exception as exc:
@@ -672,19 +717,28 @@ def run_requeue(task_id, reason):
 def run_validate_runtime():
     REPORTS.mkdir(parents=True, exist_ok=True)
     result = RuntimeValidator(ROOT).write_report(REPORTS / "runtime_validation.md")
+    log_event(
+        "runtime_validation_completed",
+        None,
+        {
+            "report_path": str(REPORTS / "runtime_validation.md"),
+            "ok": result["ok"],
+            "warnings": result.get("warnings", []),
+        },
+    )
     print(f"Runtime validation: {'OK' if result['ok'] else 'FAILED'}")
     return result
 
 def main(argv=None):
     args = parse_args(argv or [])
 
+    ensure_directories()
+    initialize_runtime_services()
+
     if args.command == "status":
         return run_status()
     if args.command == "validate-runtime":
         return run_validate_runtime()
-
-    ensure_directories()
-    initialize_runtime_services()
 
     if args.requeue:
         return run_requeue(args.requeue, args.reason)
@@ -857,6 +911,16 @@ def main(argv=None):
         execution_context=execution_context,
     )
     register_report_artifact(report, execution_context, task_id)
+    log_event(
+        {"done": "task_completed", "needs_revision": "task_needs_revision", "failed": "task_failed"}[decision],
+        task_id,
+        {
+            "summary": review_result["summary"],
+            "errors": review_result["errors"],
+            "report": str(report),
+        },
+        execution_context=execution_context,
+    )
 
     if decision == "failed":
         log_error(

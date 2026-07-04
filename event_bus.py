@@ -1,16 +1,21 @@
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from events import Event, RuntimeEvent, event_from_name, utc_now
 
 
-def utc_now():
-    return datetime.now(timezone.utc).isoformat()
-
-
-@dataclass
-class Event:
-    event_type: str
-    payload: dict = field(default_factory=dict)
-    timestamp: str = field(default_factory=utc_now)
+def normalize_event(event, payload=None, execution_id="", task_id="", timestamp=None, event_id=None):
+    if isinstance(event, RuntimeEvent):
+        return event
+    if isinstance(event, dict):
+        return RuntimeEvent.from_mapping(event)
+    if isinstance(event, str):
+        return event_from_name(
+            event,
+            payload=payload or {},
+            execution_id=execution_id or "",
+            task_id=task_id or "",
+            timestamp=timestamp,
+            event_id=event_id,
+        )
+    raise TypeError(f"unsupported event type: {type(event)!r}")
 
 
 class EventBus:
@@ -23,9 +28,15 @@ class EventBus:
     def subscribe(self, event_type, handler):
         self.handlers.setdefault(event_type, []).append(handler)
 
-    def emit(self, event):
-        if isinstance(event, str):
-            event = Event(event)
+    def emit(self, event, payload=None, execution_id="", task_id="", timestamp=None, event_id=None):
+        event = normalize_event(
+            event,
+            payload=payload,
+            execution_id=execution_id,
+            task_id=task_id,
+            timestamp=timestamp,
+            event_id=event_id,
+        )
         if self.keep_history:
             self.history.append(event)
         for handler in list(self.handlers.get(event.event_type, [])) + list(self.handlers.get("*", [])):
