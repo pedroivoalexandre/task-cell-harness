@@ -11,14 +11,26 @@ class MockExecutor(BaseExecutor):
         self.failure_reason = failure_reason or "Mock executor forced failure."
 
     def execute(self, task, context):
-        task_id = task.get("id") or context.get("task_id", "unknown")
-        title = task.get("title") or ""
+        task = task or {}
+        context = context or {}
+        execution_context = context.get("execution_context")
+        task_id = (
+            task.get("id")
+            or getattr(execution_context, "task_id", None)
+            or context.get("task_id", "unknown")
+        )
+        title = task.get("title") or getattr(execution_context, "task_title", "") or ""
+        execution_id = getattr(execution_context, "execution_id", None)
+        if execution_context:
+            execution_context.update(executor_name=self.name, executor_role=self.role)
+
         if self.should_succeed:
             output = self.output or f"Mock execution completed for {task_id}: {title}"
             return {
                 "success": True,
                 "executor": self.name,
                 "role": self.role,
+                "execution_id": execution_id,
                 "output": output,
                 "error": None,
             }
@@ -28,6 +40,7 @@ class MockExecutor(BaseExecutor):
             "success": False,
             "executor": self.name,
             "role": self.role,
+            "execution_id": execution_id,
             "output": output,
             "error": self.failure_reason,
         }

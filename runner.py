@@ -3,6 +3,7 @@ import argparse
 import json
 import sys
 from datetime import datetime, timezone
+from execution_context import ExecutionContext
 from executor_registry import load_executor_registry
 from scheduler import (
     attempt_count,
@@ -51,35 +52,54 @@ REQUIRED_TASK_JSON_FIELDS = (
 def now():
     return datetime.now(timezone.utc).isoformat()
 
-def log_event(event, task_id=None, details=None):
+def log_event(event, task_id=None, details=None, execution_context=None):
     TASK_LOG_DIR.mkdir(parents=True, exist_ok=True)
     HARNESS_LOG.parent.mkdir(parents=True, exist_ok=True)
+    details = dict(details or {})
+    if execution_context is not None:
+        details.setdefault("execution_id", execution_context.execution_id)
+        details.setdefault("execution_context", execution_context.log_fields())
     record = {
         "timestamp": now(),
         "event": event,
         "task_id": task_id,
-        "details": details or {}
+        "details": details
     }
+    if execution_context is not None:
+        record["execution_id"] = execution_context.execution_id
     with HARNESS_LOG.open("a", encoding="utf-8") as f:
         f.write(json.dumps(record, ensure_ascii=False) + "\n")
     if task_id:
         with (TASK_LOG_DIR / f"{task_id}.jsonl").open("a", encoding="utf-8") as f:
             f.write(json.dumps(record, ensure_ascii=False) + "\n")
 
-def log_error(task_id, errors, path):
+def log_error(task_id, errors, path, execution_context=None):
     ERROR_LOG_DIR.mkdir(parents=True, exist_ok=True)
+    details = {
+        "path": str(path),
+        "errors": errors,
+    }
+    if execution_context is not None:
+        details.setdefault("execution_id", execution_context.execution_id)
+        details.setdefault("execution_context", execution_context.log_fields())
     record = {
         "timestamp": now(),
         "event": "task_validation_failed",
         "task_id": task_id,
-        "details": {
-            "path": str(path),
-            "errors": errors,
-        },
+        "details": details,
     }
+    if execution_context is not None:
+        record["execution_id"] = execution_context.execution_id
     with (ERROR_LOG_DIR / f"{task_id}.jsonl").open("a", encoding="utf-8") as f:
         f.write(json.dumps(record, ensure_ascii=False) + "\n")
-    log_event("task_validation_failed", task_id, record["details"])
+    log_event("task_validation_failed", task_id, record["details"], execution_context=execution_context)
+
+
+def log_event_with_context(execution_context):
+    def logger(event, task_id=None, details=None):
+        log_event(event, task_id, details, execution_context=execution_context)
+    return logger
+
 
 
 def find_task():
@@ -278,7 +298,7 @@ def executor_config_path():
     return ROOT / EXECUTOR_CONFIG
 
 
-def resolve_executor_for_task(task_id, task_data):
+def resolve_executor_for_task(task_id, task_data, execution_context=None):
     request = executor_request(task_data)
     config_path = executor_config_path()
     registry = load_executor_registry(config_path)
@@ -288,9 +308,19 @@ def resolve_executor_for_task(task_id, task_data):
     }
     if registry.errors:
         loaded_details["errors"] = registry.errors
-        log_event("executor_registry_error", task_id, loaded_details)
+        log_event(
+            "executor_registry_error",
+            task_id,
+            loaded_details,
+            execution_context=execution_context,
+        )
     else:
-        log_event("executor_registry_loaded", task_id, loaded_details)
+        log_event(
+            "executor_registry_loaded",
+            task_id,
+            loaded_details,
+            execution_context=execution_context,
+        )
 
     resolution = registry.resolve(
         name=request["name"],
@@ -305,25 +335,40 @@ def resolve_executor_for_task(task_id, task_data):
         "resolved_role": config.get("role"),
         "reason": resolution["reason"],
     }
+    if execution_context is not None:
+        execution_context.update(
+            executor_name=config.get("name"),
+            executor_role=config.get("role"),
+        )
     if resolution["fallback"]:
-        log_event("executor_fallback_used", task_id, details)
-    log_event("executor_resolved", task_id, details)
+        log_event(
+            "executor_fallback_used",
+            task_id,
+            details,
+            execution_context=execution_context,
+        )
+    log_event("executor_resolved", task_id, details, execution_context=execution_context)
     return resolution["executor"], details
 
 
-def execute_task_with_executor(task_id, task_data, task_path):
-    executor, resolution_details = resolve_executor_for_task(task_id, task_data or {})
+def execute_task_with_executor(task_id, task_data, task_path, execution_context=None):
+    executor, resolution_details = resolve_executor_for_task(
+        task_id,
+        task_data or {},
+        execution_context=execution_context,
+    )
     context = {
         "task_id": task_id,
         "task_path": display_path(task_path),
         "executor_resolution": resolution_details,
+        "execution_context": execution_context,
     }
     details = {
         "executor": executor.name,
         "role": executor.role,
         "path": context["task_path"],
     }
-    log_event("executor_started", task_id, details)
+    log_event("executor_started", task_id, details, execution_context=execution_context)
     try:
         result = executor.execute(task_data or {}, context)
     except Exception as exc:
@@ -332,7 +377,7 @@ def execute_task_with_executor(task_id, task_data, task_path):
             "success": False,
             "error": str(exc),
         }
-        log_event("executor_failed", task_id, failure)
+        log_event("executor_failed", task_id, failure, execution_context=execution_context)
         return {
             "success": False,
             "executor": executor.name,
@@ -347,10 +392,15 @@ def execute_task_with_executor(task_id, task_data, task_path):
         "output": result.get("output", ""),
     }
     if result.get("success"):
-        log_event("executor_completed", task_id, event_details)
+        log_event(
+            "executor_completed",
+            task_id,
+            event_details,
+            execution_context=execution_context,
+        )
     else:
         event_details["error"] = result.get("error") or "executor returned failure"
-        log_event("executor_failed", task_id, event_details)
+        log_event("executor_failed", task_id, event_details, execution_context=execution_context)
     return result
 
 
@@ -602,6 +652,9 @@ def main(argv=None):
         if pre_transition_data:
             pre_transition_errors.extend(validate_task_contract(pre_transition_data))
 
+    execution_context = ExecutionContext.create(scheduler_data or {}, task_id=task_id)
+    context_log_event = log_event_with_context(execution_context)
+
     log_event(
         "task_selected",
         task_id,
@@ -613,6 +666,7 @@ def main(argv=None):
             "attempt_count": scheduler_data.get("attempt_count", 0) if scheduler_data else 0,
             "max_attempts": scheduler_data.get("max_attempts", 3) if scheduler_data else 3,
         },
+        execution_context=execution_context,
     )
 
     if scheduler_data and attempts_exhausted(scheduler_data):
@@ -621,16 +675,28 @@ def main(argv=None):
             "attempt_count": scheduler_data.get("attempt_count", 0),
             "max_attempts": scheduler_data.get("max_attempts", 3),
         }
-        log_event("task_max_attempts_exceeded", task_id, details)
+        log_event(
+            "task_max_attempts_exceeded",
+            task_id,
+            details,
+            execution_context=execution_context,
+        )
         report = write_attempt_failure_report(
             task_id,
             scheduler_data.get("title", ""),
             details["attempt_count"],
             details["max_attempts"],
         )
-        log_event("report_created", task_id, {"path": str(report), "reason": "max_attempts"})
-        running_exhausted_task = transition_task(task, "running", log_event, task_id=task_id)
-        transition_task(running_exhausted_task, "failed", log_event, task_id=task_id)
+        log_event(
+            "report_created",
+            task_id,
+            {"path": str(report), "reason": "max_attempts"},
+            execution_context=execution_context,
+        )
+        execution_context.update(task_status="running")
+        running_exhausted_task = transition_task(task, "running", context_log_event, task_id=task_id)
+        execution_context.update(task_status="failed")
+        transition_task(running_exhausted_task, "failed", context_log_event, task_id=task_id)
         print(f"Task failed max attempts: {task_id}")
         return
 
@@ -640,6 +706,10 @@ def main(argv=None):
     elif updated_data:
         scheduler_data = updated_data
         pre_transition_data = updated_data if task.is_dir() else pre_transition_data
+        execution_context.update(
+            attempt_count=updated_data.get("attempt_count"),
+            revision_count=updated_data.get("revision_count"),
+        )
         log_event(
             "task_attempt_incremented",
             task_id,
@@ -647,10 +717,12 @@ def main(argv=None):
                 "attempt_count": updated_data.get("attempt_count"),
                 "max_attempts": updated_data.get("max_attempts"),
             },
+            execution_context=execution_context,
         )
 
-    log_event("task_found", task_id, {"path": str(task)})
-    running_task = transition_task(task, "running", log_event, task_id=task_id)
+    log_event("task_found", task_id, {"path": str(task)}, execution_context=execution_context)
+    execution_context.update(task_status="running")
+    running_task = transition_task(task, "running", context_log_event, task_id=task_id)
 
     data, structural_errors = validate_running_task(
         running_task,
@@ -659,26 +731,51 @@ def main(argv=None):
     )
     if data:
         task_id = data.get("id") or task_id
+        execution_context.update(
+            task_id=task_id,
+            task_title=data.get("title"),
+            task_status=data.get("status"),
+            attempt_count=data.get("attempt_count"),
+            revision_count=data.get("revision_count"),
+        )
     elif not structural_errors:
         raise ValueError("task data could not be loaded")
 
-    log_event("task_started", task_id, {"title": data.get("title") if data else ""})
-    executor_result = execute_task_with_executor(task_id, data or {}, running_task)
+    log_event(
+        "task_started",
+        task_id,
+        {"title": data.get("title") if data else ""},
+        execution_context=execution_context,
+    )
+    executor_result = execute_task_with_executor(
+        task_id,
+        data or {},
+        running_task,
+        execution_context=execution_context,
+    )
     if not executor_result.get("success"):
         structural_errors = list(structural_errors)
         structural_errors.append(
             f"executor failed: {executor_result.get('error') or 'unknown error'}"
         )
 
-    review_task = transition_task(running_task, "review", log_event, task_id=task_id)
+    execution_context.update(task_status="review")
+    review_task = transition_task(running_task, "review", context_log_event, task_id=task_id)
 
     log_event(
         "simulated_review_started",
         task_id,
         {"path": str(task_json_path(review_task))},
+        execution_context=execution_context,
     )
     review_result = simulated_review(review_task, structural_errors)
-    log_event("simulated_review_completed", task_id, review_result)
+    execution_context.review_context = dict(review_result)
+    log_event(
+        "simulated_review_completed",
+        task_id,
+        review_result,
+        execution_context=execution_context,
+    )
 
     decision = review_result["decision"]
     status_title = {
@@ -692,12 +789,23 @@ def main(argv=None):
         status_title,
         review_result,
     )
-    log_event("report_created", task_id, {"path": str(report), "review_decision": decision})
+    log_event(
+        "report_created",
+        task_id,
+        {"path": str(report), "review_decision": decision},
+        execution_context=execution_context,
+    )
 
     if decision == "failed":
-        log_error(task_id, review_result["errors"], task_json_path(review_task))
+        log_error(
+            task_id,
+            review_result["errors"],
+            task_json_path(review_task),
+            execution_context=execution_context,
+        )
 
-    final_task = transition_task(review_task, decision, log_event, task_id=task_id)
+    execution_context.update(task_status=decision)
+    final_task = transition_task(review_task, decision, context_log_event, task_id=task_id)
     if decision == "done":
         print(f"Task completed: {task_id}")
     elif decision == "needs_revision":
