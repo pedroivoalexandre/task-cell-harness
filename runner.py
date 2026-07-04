@@ -3,8 +3,10 @@ import argparse
 import json
 import sys
 from datetime import datetime, timezone
+from artifact_manager import ArtifactManager
 from execution_context import ExecutionContext
 from executor_registry import load_executor_registry
+from report_builder import ReportBuilder
 from scheduler import (
     attempt_count,
     attempts_exhausted,
@@ -101,6 +103,32 @@ def log_event_with_context(execution_context):
     return logger
 
 
+
+def artifact_root_path():
+    return ROOT / "artifacts"
+
+
+def register_report_artifact(report_path, execution_context, task_id):
+    if execution_context is None:
+        return None
+    manager = ArtifactManager(artifact_root_path())
+    artifact = manager.register_file(
+        report_path,
+        execution_context,
+        name=Path(report_path).name,
+        kind="markdown_report",
+    )
+    log_event(
+        "artifact_registered",
+        task_id,
+        {
+            "artifact_id": artifact["artifact_id"],
+            "path": artifact["path"],
+            "kind": artifact["kind"],
+        },
+        execution_context=execution_context,
+    )
+    return artifact
 
 def find_task():
     selected = select_next_task(PENDING)
@@ -433,23 +461,15 @@ def simulated_review(task_path, structural_errors=None):
     }
 
 
-def write_task_report(task_id, title, status, review_result):
+def write_task_report(task_id, title, status, review_result, execution_context=None):
     report = REPORTS / f"{task_id}.md"
-    errors = review_result.get("errors") or []
-    error_section = ""
-    if errors:
-        error_section = "- Errors:\n" + "".join(f"  - {error}\n" for error in errors)
-    report.write_text(
-        f"# Task Report: {task_id}\n\n"
-        f"## Title\n{title or ''}\n\n"
-        f"## Status\n{status}\n\n"
-        f"## Notes\nFake task executed without calling external agents.\n\n"
-        f"## Review\n"
-        f"- Decision: {review_result.get('decision')}\n"
-        f"- Summary: {review_result.get('summary')}\n"
-        + error_section
-        + f"\n## Finished at\n{now()}\n",
-        encoding="utf-8"
+    ReportBuilder().write_report(
+        report,
+        task_id,
+        title,
+        status,
+        review_result=review_result,
+        execution_context=execution_context,
     )
     return report
 
@@ -693,6 +713,7 @@ def main(argv=None):
             {"path": str(report), "reason": "max_attempts"},
             execution_context=execution_context,
         )
+        register_report_artifact(report, execution_context, task_id)
         execution_context.update(task_status="running")
         running_exhausted_task = transition_task(task, "running", context_log_event, task_id=task_id)
         execution_context.update(task_status="failed")
@@ -788,6 +809,7 @@ def main(argv=None):
         data.get("title") if data else "",
         status_title,
         review_result,
+        execution_context=execution_context,
     )
     log_event(
         "report_created",
@@ -795,6 +817,7 @@ def main(argv=None):
         {"path": str(report), "review_decision": decision},
         execution_context=execution_context,
     )
+    register_report_artifact(report, execution_context, task_id)
 
     if decision == "failed":
         log_error(
