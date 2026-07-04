@@ -3,7 +3,7 @@ import argparse
 import json
 import sys
 from datetime import datetime, timezone
-from executors.mock import MockExecutor
+from executor_registry import load_executor_registry
 from scheduler import (
     attempt_count,
     attempts_exhausted,
@@ -29,6 +29,7 @@ REPORTS = ROOT / "reports"
 HARNESS_LOG = ROOT / "logs" / "harness.log"
 TASK_LOG_DIR = ROOT / "logs" / "tasks"
 ERROR_LOG_DIR = ROOT / "logs" / "errors"
+EXECUTOR_CONFIG = ROOT / "config" / "executors.json"
 QUEUE_STATES = (
     "pending",
     "running",
@@ -263,43 +264,59 @@ def validate_running_task(task_path, pre_transition_data=None, pre_transition_er
     return data, errors
 
 
-def boolean_setting(value, default=True):
-    if value is None:
-        return default
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, str):
-        normalized = value.strip().lower()
-        if normalized in ("1", "true", "yes", "on"):
-            return True
-        if normalized in ("0", "false", "no", "off"):
-            return False
-    return bool(value)
-
-
-def mock_success_setting(data):
-    if "mock_executor_success" in data:
-        return boolean_setting(data.get("mock_executor_success"))
-    if "mock_executor_should_succeed" in data:
-        return boolean_setting(data.get("mock_executor_should_succeed"))
-    return True
-
-
-def build_executor(task_data):
+def executor_request(task_data):
     task_data = task_data or {}
-    return MockExecutor(
-        role=task_data.get("role") or "mock",
-        should_succeed=mock_success_setting(task_data),
-        output=task_data.get("mock_executor_output"),
-        failure_reason=task_data.get("mock_executor_failure_reason"),
+    return {
+        "name": task_data.get("executor") or task_data.get("executor_name"),
+        "role": task_data.get("executor_role") or task_data.get("role"),
+    }
+
+
+def executor_config_path():
+    if Path(EXECUTOR_CONFIG).is_absolute():
+        return EXECUTOR_CONFIG
+    return ROOT / EXECUTOR_CONFIG
+
+
+def resolve_executor_for_task(task_id, task_data):
+    request = executor_request(task_data)
+    config_path = executor_config_path()
+    registry = load_executor_registry(config_path)
+    loaded_details = {
+        "path": str(config_path),
+        "count": len(registry.executors),
+    }
+    if registry.errors:
+        loaded_details["errors"] = registry.errors
+        log_event("executor_registry_error", task_id, loaded_details)
+    else:
+        log_event("executor_registry_loaded", task_id, loaded_details)
+
+    resolution = registry.resolve(
+        name=request["name"],
+        role=request["role"],
+        task=task_data or {},
     )
+    config = resolution["config"]
+    details = {
+        "requested_name": request["name"],
+        "requested_role": request["role"],
+        "resolved_name": config.get("name"),
+        "resolved_role": config.get("role"),
+        "reason": resolution["reason"],
+    }
+    if resolution["fallback"]:
+        log_event("executor_fallback_used", task_id, details)
+    log_event("executor_resolved", task_id, details)
+    return resolution["executor"], details
 
 
 def execute_task_with_executor(task_id, task_data, task_path):
-    executor = build_executor(task_data)
+    executor, resolution_details = resolve_executor_for_task(task_id, task_data or {})
     context = {
         "task_id": task_id,
         "task_path": display_path(task_path),
+        "executor_resolution": resolution_details,
     }
     details = {
         "executor": executor.name,
