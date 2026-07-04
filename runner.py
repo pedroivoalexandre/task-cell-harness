@@ -5,8 +5,13 @@ import sys
 from datetime import datetime, timezone
 from artifact_manager import ArtifactManager
 from execution_context import ExecutionContext
+from event_bus import Event, EventBus
+from metrics_collector import MetricsCollector
 from executor_registry import load_executor_registry
 from report_builder import ReportBuilder
+from resource_manager import ResourceManager
+from runtime_config import RuntimeConfig
+from runtime_validation import RuntimeValidator
 from scheduler import (
     attempt_count,
     attempts_exhausted,
@@ -33,6 +38,12 @@ HARNESS_LOG = ROOT / "logs" / "harness.log"
 TASK_LOG_DIR = ROOT / "logs" / "tasks"
 ERROR_LOG_DIR = ROOT / "logs" / "errors"
 EXECUTOR_CONFIG = ROOT / "config" / "executors.json"
+RUNTIME_CONFIG = ROOT / "config" / "runtime.json"
+EVENT_BUS = EventBus()
+METRICS = None
+RESOURCE_MANAGER = None
+CURRENT_RUNTIME_CONFIG = RuntimeConfig()
+
 QUEUE_STATES = (
     "pending",
     "running",
@@ -50,6 +61,22 @@ REQUIRED_TASK_JSON_FIELDS = (
     "priority",
     "role",
 )
+
+def runtime_config_path():
+    if Path(RUNTIME_CONFIG).is_absolute():
+        return RUNTIME_CONFIG
+    return ROOT / RUNTIME_CONFIG
+
+
+def initialize_runtime_services():
+    global EVENT_BUS, METRICS, RESOURCE_MANAGER, CURRENT_RUNTIME_CONFIG
+    CURRENT_RUNTIME_CONFIG = RuntimeConfig.load(runtime_config_path())
+    EVENT_BUS = EventBus()
+    METRICS = MetricsCollector(REPORTS / "metrics.json")
+    RESOURCE_MANAGER = ResourceManager(ROOT / "runtime", project_root=ROOT)
+    RESOURCE_MANAGER.ensure_directories()
+    EVENT_BUS.subscribe("*", METRICS.handle_event)
+
 
 def now():
     return datetime.now(timezone.utc).isoformat()
@@ -74,6 +101,7 @@ def log_event(event, task_id=None, details=None, execution_context=None):
     if task_id:
         with (TASK_LOG_DIR / f"{task_id}.jsonl").open("a", encoding="utf-8") as f:
             f.write(json.dumps(record, ensure_ascii=False) + "\n")
+    EVENT_BUS.emit(Event(event, record))
 
 def log_error(task_id, errors, path, execution_context=None):
     ERROR_LOG_DIR.mkdir(parents=True, exist_ok=True)
@@ -612,7 +640,7 @@ def parse_args(argv=None):
     parser.add_argument(
         "command",
         nargs="?",
-        choices=("status",),
+        choices=("status", "validate-runtime"),
         help="inspect the task queue without executing tasks",
     )
     parser.add_argument(
@@ -641,13 +669,22 @@ def run_requeue(task_id, reason):
     return destination
 
 
+def run_validate_runtime():
+    REPORTS.mkdir(parents=True, exist_ok=True)
+    result = RuntimeValidator(ROOT).write_report(REPORTS / "runtime_validation.md")
+    print(f"Runtime validation: {'OK' if result['ok'] else 'FAILED'}")
+    return result
+
 def main(argv=None):
     args = parse_args(argv or [])
 
     if args.command == "status":
         return run_status()
+    if args.command == "validate-runtime":
+        return run_validate_runtime()
 
     ensure_directories()
+    initialize_runtime_services()
 
     if args.requeue:
         return run_requeue(args.requeue, args.reason)
@@ -673,6 +710,8 @@ def main(argv=None):
             pre_transition_errors.extend(validate_task_contract(pre_transition_data))
 
     execution_context = ExecutionContext.create(scheduler_data or {}, task_id=task_id)
+    if RESOURCE_MANAGER is not None:
+        RESOURCE_MANAGER.prepare_execution(execution_context)
     context_log_event = log_event_with_context(execution_context)
 
     log_event(
