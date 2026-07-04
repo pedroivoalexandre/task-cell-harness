@@ -3,6 +3,7 @@ import argparse
 import json
 import sys
 from datetime import datetime, timezone
+from executors.mock import MockExecutor
 from scheduler import (
     attempt_count,
     attempts_exhausted,
@@ -260,6 +261,80 @@ def validate_running_task(task_path, pre_transition_data=None, pre_transition_er
             errors.extend(validate_task_contract(data))
         return data, errors
     return data, errors
+
+
+def boolean_setting(value, default=True):
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in ("1", "true", "yes", "on"):
+            return True
+        if normalized in ("0", "false", "no", "off"):
+            return False
+    return bool(value)
+
+
+def mock_success_setting(data):
+    if "mock_executor_success" in data:
+        return boolean_setting(data.get("mock_executor_success"))
+    if "mock_executor_should_succeed" in data:
+        return boolean_setting(data.get("mock_executor_should_succeed"))
+    return True
+
+
+def build_executor(task_data):
+    task_data = task_data or {}
+    return MockExecutor(
+        role=task_data.get("role") or "mock",
+        should_succeed=mock_success_setting(task_data),
+        output=task_data.get("mock_executor_output"),
+        failure_reason=task_data.get("mock_executor_failure_reason"),
+    )
+
+
+def execute_task_with_executor(task_id, task_data, task_path):
+    executor = build_executor(task_data)
+    context = {
+        "task_id": task_id,
+        "task_path": display_path(task_path),
+    }
+    details = {
+        "executor": executor.name,
+        "role": executor.role,
+        "path": context["task_path"],
+    }
+    log_event("executor_started", task_id, details)
+    try:
+        result = executor.execute(task_data or {}, context)
+    except Exception as exc:
+        failure = {
+            **details,
+            "success": False,
+            "error": str(exc),
+        }
+        log_event("executor_failed", task_id, failure)
+        return {
+            "success": False,
+            "executor": executor.name,
+            "role": executor.role,
+            "output": "",
+            "error": str(exc),
+        }
+
+    event_details = {
+        **details,
+        "success": bool(result.get("success")),
+        "output": result.get("output", ""),
+    }
+    if result.get("success"):
+        log_event("executor_completed", task_id, event_details)
+    else:
+        event_details["error"] = result.get("error") or "executor returned failure"
+        log_event("executor_failed", task_id, event_details)
+    return result
 
 
 def simulated_review(task_path, structural_errors=None):
@@ -571,6 +646,13 @@ def main(argv=None):
         raise ValueError("task data could not be loaded")
 
     log_event("task_started", task_id, {"title": data.get("title") if data else ""})
+    executor_result = execute_task_with_executor(task_id, data or {}, running_task)
+    if not executor_result.get("success"):
+        structural_errors = list(structural_errors)
+        structural_errors.append(
+            f"executor failed: {executor_result.get('error') or 'unknown error'}"
+        )
+
     review_task = transition_task(running_task, "review", log_event, task_id=task_id)
 
     log_event(
