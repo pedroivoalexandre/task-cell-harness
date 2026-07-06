@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 
 from executor_registry import load_executor_registry
+from local_directories import ensure_local_directories
 from runtime_config import RuntimeConfig
 
 REQUIRED_DIRS = ("tasks", "reports", "logs", "artifacts", "config", "docs", "executors")
@@ -35,6 +36,7 @@ class RuntimeValidator:
     def validate(self):
         checks = []
         warnings = []
+        ensure_local_directories(self.root)
         checks.extend(self._check_directories())
         checks.append(self._check_executor_config())
         runtime_check = self._check_runtime_config()

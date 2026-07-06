@@ -2,6 +2,9 @@
 
 `runtime_validation.py` performs pre-execution hardening checks before any real-agent work.
 
+It also bootstraps the local runtime directories required for a clean-clone validation run,
+so `python3 runner.py validate-runtime` can succeed without a manual `mkdir -p artifacts`.
+
 ## Checks
 
 - Required directories.

@@ -8,6 +8,7 @@ from execution_context import ExecutionContext
 from event_bus import EventBus
 from events import event_from_name
 from metrics_collector import MetricsCollector
+from local_directories import ensure_local_directories
 from executor_registry import load_executor_registry
 from report_builder import ReportBuilder
 from resource_manager import ResourceManager
@@ -661,6 +662,7 @@ def requeue_task(task_path, reason):
         raise
 
 def ensure_directories():
+    ensure_local_directories(ROOT)
     for directory in (
         PENDING,
         RUNNING,
@@ -715,7 +717,6 @@ def run_requeue(task_id, reason):
 
 
 def run_validate_runtime():
-    REPORTS.mkdir(parents=True, exist_ok=True)
     result = RuntimeValidator(ROOT).write_report(REPORTS / "runtime_validation.md")
     log_event(
         "runtime_validation_completed",
