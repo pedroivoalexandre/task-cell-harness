@@ -1,0 +1,26 @@
+# Python caches
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Local logs
+logs/*.log
+logs/**/*.log
+
+# Local runtime outputs
+artifacts/
+runtime/locks/
+runtime/state/
+runtime/temp/
+
+# Common temporary files
+*.tmp
+*.temp
+*.swp
+*.swo
+*.bak
+*~
+
+# System files
+.DS_Store
+Thumbs.db
