@@ -1,0 +1,35 @@
+{
+  "conceptual_states": [
+    "created",
+    "ready",
+    "implementing",
+    "implemented",
+    "reviewing",
+    "approved",
+    "needs_changes",
+    "failed",
+    "archived"
+  ],
+  "operational_mapping": {
+    "created": "pending",
+    "ready": "pending",
+    "implementing": "running",
+    "implemented": "running",
+    "reviewing": "review",
+    "approved": "done",
+    "needs_changes": "needs_revision",
+    "failed": "failed",
+    "archived": "done"
+  },
+  "permitted_transitions": [
+    ["pending", "running"],
+    ["running", "review"],
+    ["running", "done"],
+    ["running", "failed"],
+    ["review", "done"],
+    ["review", "needs_revision"],
+    ["review", "failed"],
+    ["needs_revision", "pending"],
+    ["failed", "pending"]
+  ]
+}
