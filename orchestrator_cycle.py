@@ -97,6 +97,8 @@ def run_simulated_cycle(cell_data, workspace):
     report_path = workspace / f"{cell.task_id}.report.md"
     report_path.write_text(report_text, encoding="utf-8")
 
+    cell.report = str(report_path)
+    cell.dump(workspace / f"{cell.task_id}.json")
     result = {
         "cell": cell.to_dict(),
         "implementation_prompt": implementation_prompt,
@@ -108,6 +110,4 @@ def run_simulated_cycle(cell_data, workspace):
         "review_path": str(review_path),
         "report_path": str(report_path),
     }
-    cell.report = str(report_path)
-    cell.dump(workspace / f"{cell.task_id}.json")
     return result
