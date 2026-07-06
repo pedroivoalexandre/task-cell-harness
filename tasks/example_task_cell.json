@@ -1,0 +1,16 @@
+{
+  "task_id": "example_task_cell",
+  "title": "Example Task Cell",
+  "objective": "Demonstrate a complete cell contract.",
+  "context": "Local harness validation.",
+  "inputs": [],
+  "constraints": [],
+  "allowed_actions": ["edit local files", "run local tests"],
+  "forbidden_actions": ["execute real agents", "use Tablet"],
+  "acceptance_criteria": ["Contract fields are present"],
+  "expected_artifacts": ["docs/task_cell_contract.md"],
+  "implementer_prompt": "Implement the requested local change.",
+  "reviewer_prompt": "Review the local change against the acceptance criteria.",
+  "status": "draft",
+  "report": "reports/example_task_cell.md"
+}

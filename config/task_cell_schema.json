@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Task Cell",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "task_id",
+    "title",
+    "objective",
+    "context",
+    "inputs",
+    "constraints",
+    "allowed_actions",
+    "forbidden_actions",
+    "acceptance_criteria",
+    "expected_artifacts",
+    "implementer_prompt",
+    "reviewer_prompt",
+    "status",
+    "report"
+  ],
+  "properties": {
+    "task_id": { "type": "string", "minLength": 1 },
+    "title": { "type": "string", "minLength": 1 },
+    "objective": { "type": "string", "minLength": 1 },
+    "context": { "type": "string", "minLength": 1 },
+    "inputs": { "type": "array" },
+    "constraints": { "type": "array" },
+    "allowed_actions": { "type": "array" },
+    "forbidden_actions": { "type": "array" },
+    "acceptance_criteria": { "type": "array" },
+    "expected_artifacts": { "type": "array" },
+    "implementer_prompt": { "type": "string", "minLength": 1 },
+    "reviewer_prompt": { "type": "string", "minLength": 1 },
+    "status": { "type": "string", "minLength": 1 },
+    "report": { "type": "string", "minLength": 1 }
+  }
+}
