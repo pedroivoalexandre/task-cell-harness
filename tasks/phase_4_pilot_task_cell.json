@@ -1,0 +1,51 @@
+{
+  "task_id": "phase_4_pilot_task_cell",
+  "title": "Phase 4 pilot documentation task",
+  "objective": "Validate supervised local use by documenting the phase 4 safety and execution model for the harness.",
+  "context": "FASE 3 already proved the simulated orchestration loop. This pilot keeps the work local, small, and easy to roll back.",
+  "inputs": [
+    "docs/architecture_v2.md",
+    "docs/task_cell_contract.md",
+    "docs/orchestrator_cycle.md",
+    "reports/phase_3_final_report.md"
+  ],
+  "constraints": [
+    "Keep the task inside the harness repository.",
+    "Do not integrate the Tablet.",
+    "Do not distribute work across machines.",
+    "Do not launch real agents automatically.",
+    "Keep rollback simple and local."
+  ],
+  "allowed_actions": [
+    "edit phase 4 documentation",
+    "create task cell fixtures",
+    "create Markdown reports",
+    "run local validation commands",
+    "document human decisions"
+  ],
+  "forbidden_actions": [
+    "autonomous agent execution",
+    "parallel worker execution",
+    "Tablet integration",
+    "deploys",
+    "critical project changes",
+    "unapproved Git write operations"
+  ],
+  "acceptance_criteria": [
+    "A phase 4 safety plan exists.",
+    "A phase 4 local execution mode exists.",
+    "The work remains local and supervised.",
+    "The report explains the human approval boundary.",
+    "The change can be rolled back with minimal effort."
+  ],
+  "expected_artifacts": [
+    "docs/phase_4_safety_plan.md",
+    "docs/phase_4_local_execution_mode.md",
+    "config/phase_4_execution_mode.json",
+    "reports/phase_4_first_execution_report.md"
+  ],
+  "implementer_prompt": "Prepare the phase 4 safety and local execution documentation for supervised local use. Keep the scope narrow and auditable.",
+  "reviewer_prompt": "Review the pilot documentation for safety, scope control, and rollback clarity before any broader phase 4 work proceeds.",
+  "status": "draft",
+  "report": "reports/phase_4_first_execution_report.md"
+}

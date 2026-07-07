@@ -1,0 +1,48 @@
+{
+  "task_id": "phase_4_second_validation_task_cell",
+  "title": "Phase 4 second validation Task Cell",
+  "objective": "Validate that a second small supervised local Task Cell can be defined with the same guardrails and traceability.",
+  "context": "This second cell checks repeatability with a different documentation-oriented scope from the first phase 4 task.",
+  "inputs": [
+    "docs/phase_4_safety_plan.md",
+    "docs/phase_4_local_execution_mode.md",
+    "docs/phase_4_first_task_cell.md",
+    "reports/phase_4_first_execution_report.md"
+  ],
+  "constraints": [
+    "Keep the task small.",
+    "Keep the task local.",
+    "Do not call external agents automatically.",
+    "Do not integrate the Tablet.",
+    "Do not distribute work across machines."
+  ],
+  "allowed_actions": [
+    "refine phase 4 documentation",
+    "add checklist style guidance",
+    "add small validation notes",
+    "write a complete report",
+    "run local validations"
+  ],
+  "forbidden_actions": [
+    "autonomous execution",
+    "parallel workers",
+    "distributed orchestration",
+    "Tablet integration",
+    "deploys",
+    "critical project edits"
+  ],
+  "acceptance_criteria": [
+    "The task is different from the first phase 4 task.",
+    "The scope is small and reversible.",
+    "The report is complete.",
+    "The same phase 4 guardrails still apply.",
+    "The final status is traceable."
+  ],
+  "expected_artifacts": [
+    "reports/phase_4_second_validation_report.md"
+  ],
+  "implementer_prompt": "Prepare a second small phase 4 validation task that stays local, supervised, and easy to roll back.",
+  "reviewer_prompt": "Review the second validation task for repeatability, safety, and alignment with the phase 4 boundary.",
+  "status": "draft",
+  "report": "reports/phase_4_second_validation_report.md"
+}

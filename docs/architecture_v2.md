@@ -9,13 +9,13 @@ Local work on the Yoga is the development workspace used to evolve the harness b
 
 ### Lenovo Yoga
 
-The Lenovo Yoga is the primary development environment for FASE 3.
+The Lenovo Yoga is the primary development environment for FASE 3 and FASE 4.
 All code changes, tests, documentation updates, and refactors are performed here.
 
 ### Galaxy Tab S10+
 
 The Galaxy Tab S10+ is reserved for a future Control Plane role.
-It may later coordinate monitoring, queue management, and task distribution, but it is not used in FASE 3.
+It may later coordinate monitoring, queue management, and task distribution, but it is not used in FASE 3 or FASE 4.
 
 ### Acer and XPS13
 
@@ -76,6 +76,32 @@ The phase excludes:
 - Tablet integration;
 - production control-plane behavior;
 - any change that would require networked agent execution.
+
+## FASE 4 Boundary
+
+FASE 4 introduces real local use of the harness, but only in a supervised form.
+It is intended to validate that the harness can support real tasks, prompts, reviews, and reports without autonomous dispatch or distributed workers.
+
+FASE 4 includes:
+
+- local manual-assisted execution of Task Cells;
+- human approval for prompts and execution steps;
+- explicit logging and reporting of implementation and review decisions;
+- dry-run support where needed;
+- conservative rollback and abort rules;
+- documentation and fixtures that make real local use auditable.
+
+FASE 4 excludes:
+
+- distributed execution;
+- Tablet integration;
+- remote workers;
+- autonomous multi-agent fan-out;
+- deploy or release automation;
+- any change that would force a new control-plane topology.
+
+FASE 5 is reserved for distribution across machines.
+FASE 6 is reserved for operations, observability, and stabilization.
 
 ## Criteria To Enter FASE 4
 

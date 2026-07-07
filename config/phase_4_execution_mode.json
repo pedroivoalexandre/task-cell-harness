@@ -1,0 +1,48 @@
+{
+  "phase": "4",
+  "execution_mode": "manual_assisted",
+  "dry_run_default": true,
+  "requires_human_approval": true,
+  "allow_autonomous_agent_dispatch": false,
+  "allow_multiple_agents_in_parallel": false,
+  "allow_distributed_execution": false,
+  "allow_tablet_integration": false,
+  "allow_external_cli_without_explicit_approval": false,
+  "allow_git_write_operations_without_explicit_approval": false,
+  "allow_deployments": false,
+  "allowed_scope": [
+    "documentation",
+    "small local tests",
+    "small refactors that are easy to roll back",
+    "task cell fixture updates",
+    "report generation",
+    "manual review traces"
+  ],
+  "review_required_for": [
+    "prompt generation",
+    "prompt execution",
+    "file writes outside the documented scope",
+    "any git state change",
+    "any CLI that can modify external state"
+  ],
+  "abort_conditions": [
+    "request to distribute work across machines",
+    "request to integrate the Tablet",
+    "request to launch real agents automatically",
+    "request to run external CLIs without explicit approval",
+    "request to modify a critical project",
+    "unexpected architectural drift"
+  ],
+  "rollback_policy": [
+    "prefer small, reviewable file-level changes",
+    "revert only the affected phase 4 files if the change is isolated",
+    "preserve unrelated user modifications",
+    "capture the rollback reason in the report"
+  ],
+  "logging_policy": [
+    "record implementation input, review input, and final status",
+    "keep logs local and auditable",
+    "prefer Markdown reports for durable summaries",
+    "avoid automatic redaction of decision context"
+  ]
+}

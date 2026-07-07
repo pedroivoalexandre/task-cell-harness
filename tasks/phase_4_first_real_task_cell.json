@@ -1,0 +1,50 @@
+{
+  "task_id": "phase_4_first_real_task_cell",
+  "title": "Phase 4 first supervised local Task Cell",
+  "objective": "Document the safe supervised local execution model that will be used for real phase 4 task work.",
+  "context": "This cell represents the first real local use of the harness in phase 4. It is intentionally documentation-focused and low risk.",
+  "inputs": [
+    "docs/architecture_v2.md",
+    "docs/task_cell_contract.md",
+    "docs/orchestrator_cycle.md",
+    "docs/phase_4_safety_plan.md",
+    "docs/phase_4_local_execution_mode.md"
+  ],
+  "constraints": [
+    "Stay local to the harness repository.",
+    "Do not call external CLIs without explicit approval.",
+    "Do not launch agents automatically.",
+    "Do not integrate the Tablet.",
+    "Do not distribute work across machines."
+  ],
+  "allowed_actions": [
+    "write phase 4 documentation",
+    "write phase 4 task fixtures",
+    "write phase 4 reports",
+    "record human approval traces",
+    "run local validations"
+  ],
+  "forbidden_actions": [
+    "autonomous execution",
+    "parallel agent workers",
+    "distributed orchestration",
+    "Tablet integration",
+    "deploys",
+    "critical project edits"
+  ],
+  "acceptance_criteria": [
+    "The safety plan is explicit.",
+    "The local execution mode is explicit.",
+    "The task remains small and reversible.",
+    "The report captures implementation and review results.",
+    "The status is traceable without agent autonomy."
+  ],
+  "expected_artifacts": [
+    "docs/phase_4_first_task_cell.md",
+    "reports/phase_4_first_execution_report.md"
+  ],
+  "implementer_prompt": "Implement the phase 4 first supervised local task as a documentation and fixture update. Keep the change small and reviewable.",
+  "reviewer_prompt": "Review the phase 4 first supervised local task for safety guardrails, completeness, and phase boundary compliance.",
+  "status": "draft",
+  "report": "reports/phase_4_first_execution_report.md"
+}
