@@ -1,0 +1,57 @@
+{
+  "task_id": "HARNESS-001",
+  "title": "Documentacao oficial da maquina de estados do Task Cell Harness",
+  "objective": "Implementar a documentacao oficial da maquina de estados do Task Cell Harness.",
+  "context": "A tarefa registra a etapa IMPLEMENTAR do fluxo oficial conduzido por central02, com foco em documentacao e rastreabilidade.",
+  "inputs": [
+    "docs/state_machine.md",
+    "docs/orchestrator_cycle.md",
+    "docs/task_cell_contract.md",
+    "docs/task_contract.md",
+    "docs/requeue_flow.md"
+  ],
+  "constraints": [
+    "Nao alterar arquivos fora do escopo permitido.",
+    "Nao alterar codigo Python.",
+    "Nao alterar configuracao do Harness.",
+    "Nao iniciar outra tarefa.",
+    "Nao avançar o estado oficial da tarefa.",
+    "Nao integrar Tablet.",
+    "Nao iniciar FASE 5.",
+    "Nao executar agentes reais automaticamente."
+  ],
+  "allowed_actions": [
+    "atualizar documentacao oficial",
+    "criar workflow operacional",
+    "criar fixture JSON da task cell",
+    "criar relatorio da etapa",
+    "executar validacoes locais permitidas"
+  ],
+  "forbidden_actions": [
+    "commit",
+    "push",
+    "alterar arquivos fora do escopo",
+    "executar agentes reais",
+    "integrar Tablet",
+    "iniciar fase posterior"
+  ],
+  "acceptance_criteria": [
+    "docs/state_machine.md documenta todos os estados oficiais.",
+    "docs/state_machine.md documenta transicoes permitidas.",
+    "docs/state_machine.md documenta estados especiais.",
+    "docs/state_machine.md explicita que CORRIGIR sempre volta para VERIFICAR.",
+    "docs/workflow.md explica o fluxo operacional entre central02, Acer e Codex.",
+    "task-cells/HARNESS-001_state_machine.json e JSON valido.",
+    "reports/HARNESS-001_relatorio.md resume a execucao da etapa."
+  ],
+  "expected_artifacts": [
+    "docs/state_machine.md",
+    "docs/workflow.md",
+    "task-cells/HARNESS-001_state_machine.json",
+    "reports/HARNESS-001_relatorio.md"
+  ],
+  "implementer_prompt": "Implement the official Task Cell Harness state machine documentation for HARNESS-001. Keep the change local, explicit, and aligned with the official workflow.",
+  "reviewer_prompt": "Review the HARNESS-001 documentation update for completeness, transition correctness, and the CORRIGIR to VERIFICAR rule.",
+  "status": "DOCUMENTAR",
+  "report": "reports/HARNESS-001_relatorio.md"
+}

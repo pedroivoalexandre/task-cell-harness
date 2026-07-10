@@ -1,99 +1,91 @@
-# Task State Machine
+# Task Cell Harness State Machine
 
-The Task Cell Harness uses an explicit state machine to control task lifecycle
-movement under `tasks/`.
+This document defines the official lifecycle for Task Cells in the Task Cell Harness.
+It is the canonical state machine for the central02-led workflow.
 
-## Official states
+## Official States
 
-- `pending`
-- `running`
-- `review`
-- `needs_revision`
-- `done`
-- `failed`
+The official lifecycle states are:
 
-Each state maps to a directory under `tasks/<state>/`.
+- `BACKLOG`
+- `READY`
+- `PLANEJAR`
+- `IMPLEMENTAR`
+- `TESTAR`
+- `VERIFICAR`
+- `CORRIGIR`
+- `DOCUMENTAR`
+- `PUBLICAR`
+- `REGISTRAR_SCOREBOARD`
+- `FINALIZADO`
 
-## Allowed transitions
+## Special States
+
+The following states are valid and may be used to pause, stop, or retain a task outside the normal lifecycle:
+
+- `BLOQUEADO`
+- `AGUARDANDO_PEDRO`
+- `CANCELADO`
+- `ARQUIVADO`
+
+## Allowed Transitions
+
+### Main flow
 
 | From | To |
 | --- | --- |
-| `pending` | `running` |
-| `running` | `review` |
-| `running` | `done` |
-| `running` | `failed` |
-| `review` | `done` |
-| `review` | `needs_revision` |
-| `review` | `failed` |
-| `needs_revision` | `pending` |
-| `failed` | `pending` |
+| `BACKLOG` | `READY` |
+| `READY` | `PLANEJAR` |
+| `PLANEJAR` | `IMPLEMENTAR` |
+| `IMPLEMENTAR` | `TESTAR` |
+| `TESTAR` | `VERIFICAR` |
+| `VERIFICAR` | `DOCUMENTAR` |
+| `DOCUMENTAR` | `PUBLICAR` |
+| `PUBLICAR` | `REGISTRAR_SCOREBOARD` |
+| `REGISTRAR_SCOREBOARD` | `FINALIZADO` |
 
-`done` is terminal.
+### Rejection flow
 
-## Invalid transitions
+| From | To |
+| --- | --- |
+| `VERIFICAR` | `CORRIGIR` |
+| `CORRIGIR` | `VERIFICAR` |
 
-Any transition not listed above is blocked by `state_machine.InvalidTransition`.
-Unknown states are also rejected.
+## Critical Rule
 
-## Logging
+`CORRIGIR` never goes directly to `DOCUMENTAR`.
+After any correction, the task always returns to `VERIFICAR` for a new approval pass.
 
-Every successful state transition writes a JSONL event through the runner log
-callback:
+## Special-State Use
 
-```json
-{
-  "event": "task_state_transition",
-  "task_id": "example_task_contract",
-  "details": {
-    "from": "pending",
-    "to": "running",
-    "source": "tasks/pending/example_task_contract",
-    "destination": "tasks/running/example_task_contract",
-    "status_updated": true
-  }
-}
-```
+Special states do not extend the main lifecycle flow. They are used when the task cannot continue normally:
 
-The runner callback writes the event to both `logs/harness.log` and
-`logs/tasks/<task_id>.jsonl`.
+- `BLOQUEADO`: the task cannot proceed without an external dependency or decision.
+- `AGUARDANDO_PEDRO`: the task is waiting for Pedro's input or approval.
+- `CANCELADO`: the task was stopped and should not continue.
+- `ARQUIVADO`: the task is retained for reference and no longer actively worked.
 
-## task.json status
+## Invalid Transitions
 
-When a task has a readable `task.json`, the state machine updates its `status`
-field before moving the task to the destination state directory. It also writes
-an `updated_at` timestamp.
+Any transition not listed above is invalid and must be rejected.
+Unknown states are also invalid.
 
-Legacy JSON tasks without an explicit `status` use their directory state as the
-current state and are still moved through the same transition checks.
+## Operational Meaning
 
-## Simulated review flow
+- `BACKLOG`: task registered but not yet ready for planning.
+- `READY`: task is ready to be planned.
+- `PLANEJAR`: scope, constraints, and approach are being defined.
+- `IMPLEMENTAR`: local work is being executed.
+- `TESTAR`: validations, checks, or tests are being run.
+- `VERIFICAR`: central02 or the designated reviewer evaluates the result.
+- `CORRIGIR`: implementation changes are being applied after rejection.
+- `DOCUMENTAR`: final documentation is being produced after approval.
+- `PUBLICAR`: approved artifacts are being published to the canonical location.
+- `REGISTRAR_SCOREBOARD`: scoreboard entry is updated with the task result.
+- `FINALIZADO`: the task is complete.
 
-The runner currently uses a local simulated review step and does not call Gemini
-or Codex as subprocesses.
+## Notes
 
-Current successful execution flow:
-
-```text
-pending -> running -> review -> done
-```
-
-Revision flow:
-
-```text
-pending -> running -> review -> needs_revision
-```
-
-The state machine also permits returning revised work to the queue:
-
-```text
-needs_revision -> pending
-```
-
-The simulated review reads `task.json` and decides:
-
-- `done` when `acceptance_criteria` exists and is not empty.
-- `needs_revision` when the task is structurally valid but has no
-  `acceptance_criteria`.
-- `failed` when structural validation errors are present.
-
-Reports include a `Review` section with the simulated decision and summary.
+- The task must not jump from `CORRIGIR` to `DOCUMENTAR`.
+- The normal approval gate is always `VERIFICAR`.
+- Special states can interrupt the lifecycle, but they do not replace the official main flow.
