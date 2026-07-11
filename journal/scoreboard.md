@@ -18,6 +18,7 @@ O scoreboard resume o estado das tarefas, mas não substitui os contratos, relat
 | Task Cell | Projeto | Estado | Resultado | Worker | Executor planejado | Executor real | Commit | Próximo estado |
 |---|---|---|---|---|---|---|---|---|
 | HARNESS-001 | Task Cell Harness | REGISTRAR_SCOREBOARD | Publicada | Acer | Gemini em TESTAR | Codex em TESTAR | `1c1f7e09ada3f8f58453f433faee6c76ed87d5c8` | FINALIZADO |
+| APP-005 | App de Aprendizagem | REGISTRAR_SCOREBOARD | Publicada e aprovada | Acer | Codex em REGISTRAR_SCOREBOARD | Codex em REGISTRAR_SCOREBOARD | `ac0b1c1` | FINALIZADO |
 
 ## Registros detalhados
 
@@ -67,4 +68,43 @@ O scoreboard resume o estado das tarefas, mas não substitui os contratos, relat
 #### Observações
 
 - A HARNESS-001 foi implementada, testada, corrigida, verificada, documentada e publicada.
+- O scoreboard registra o estado operacional resumido e aponta para os artefatos canônicos.
+
+### APP-005 — Definir banco local de atividades em JSON
+
+- **Task ID:** `APP-005`
+- **Título:** Definir banco local de atividades em JSON
+- **Projeto:** App de Aprendizagem
+- **Repositório:** `/home/vo/workspace/projetos/app-aprendizagem`
+- **Branch:** `main`
+- **Estado atual:** `REGISTRAR_SCOREBOARD`
+- **Resultado:** Publicada e aprovada
+- **Worker:** Acer
+- **Executor planejado:** Codex em `REGISTRAR_SCOREBOARD`
+- **Executor real:** Codex em `REGISTRAR_SCOREBOARD`
+- **Commit:** `ac0b1c1`
+- **Mensagem do commit:** `Register APP-005 in scoreboard`
+
+#### Artefatos publicados
+
+- `docs/banco_local_atividades_json.md`
+- `task-cells/APP-005_banco_local_atividades_json.json`
+- `reports/APP-005_relatorio.md`
+
+#### Riscos
+
+- Baixo.
+- Registro limitado ao scoreboard oficial, sem alterar o contrato da Task Cell.
+
+#### Pendências
+
+- Nenhuma pendência funcional.
+
+#### Próximo estado
+
+`FINALIZADO`
+
+#### Observações
+
+- A APP-005 foi registrada no scoreboard oficial do Task Cell Harness.
 - O scoreboard registra o estado operacional resumido e aponta para os artefatos canônicos.
