@@ -19,6 +19,7 @@ O scoreboard resume o estado das tarefas, mas não substitui os contratos, relat
 |---|---|---|---|---|---|---|---|---|
 | HARNESS-001 | Task Cell Harness | REGISTRAR_SCOREBOARD | Publicada | Acer | Gemini em TESTAR | Codex em TESTAR | `1c1f7e09ada3f8f58453f433faee6c76ed87d5c8` | FINALIZADO |
 | APP-005 | App de Aprendizagem | REGISTRAR_SCOREBOARD | Publicada e aprovada | Acer | Codex em REGISTRAR_SCOREBOARD | Codex em REGISTRAR_SCOREBOARD | `ac0b1c1` | FINALIZADO |
+| APP-006 | App de Aprendizagem | REGISTRAR_SCOREBOARD | Publicada e aprovada | Acer | Codex em REGISTRAR_SCOREBOARD | Codex em REGISTRAR_SCOREBOARD | `9b16620` | FINALIZADO |
 
 ## Registros detalhados
 
@@ -107,4 +108,55 @@ O scoreboard resume o estado das tarefas, mas não substitui os contratos, relat
 #### Observações
 
 - A APP-005 foi registrada no scoreboard oficial do Task Cell Harness.
+- O scoreboard registra o estado operacional resumido e aponta para os artefatos canônicos.
+
+### APP-006 — Definir arquitetura técnica do MVP em Flutter
+
+- **Task ID:** `APP-006`
+- **Título:** Definir arquitetura técnica do MVP em Flutter
+- **Projeto:** App de Aprendizagem
+- **Repositório:** `/home/vo/workspace/projetos/app-aprendizagem`
+- **Branch:** `main`
+- **Estado atual:** `REGISTRAR_SCOREBOARD`
+- **Resultado:** Publicada e aprovada
+- **Worker:** Acer
+- **Executor planejado:** Codex em `REGISTRAR_SCOREBOARD`
+- **Executor real:** Codex em `REGISTRAR_SCOREBOARD`
+- **Commit:** `9b16620`
+- **Mensagem do commit:** `Add APP-006 Flutter architecture documentation`
+
+#### Artefatos publicados
+
+- `docs/arquitetura_tecnica_flutter_mvp.md`
+- `docs/knowledge/00_contexto_arquitetural_app_aprendizagem.md`
+- `docs/knowledge/01_solid_aplicado_ao_mvp_flutter.md`
+- `docs/knowledge/02_grasp_aplicado_ao_mvp_flutter.md`
+- `docs/knowledge/03_gof_aplicado_ao_motor_de_atividades.md`
+- `docs/knowledge/04_limites_anti_overengineering_mvp.md`
+- `docs/knowledge/05_checklist_design_codigo.md`
+- `task-cells/APP-006_arquitetura_tecnica_flutter_mvp.json`
+- `reports/APP-006_relatorio.md`
+
+#### Riscos
+
+- Ambiguidade herdada da APP-004 sobre o campo `acertos`, pendente de decisão antes da implementação Flutter.
+- Possível divergência futura entre APP-002 e APP-005 durante implementação.
+- Evitar evolução prematura da arquitetura.
+
+#### Pendências
+
+- Nenhuma pendência funcional.
+
+#### Próximo estado
+
+`FINALIZADO`
+
+#### Observações
+
+- A APP-006 foi aprovada em `TESTAR`.
+- A APP-006 foi aprovada em `VERIFICAR`.
+- A arquitetura é exclusivamente documental.
+- O modo offline-first foi preservado.
+- Nenhum código funcional foi criado.
+- Nenhum dado sensível foi criado ou proposto.
 - O scoreboard registra o estado operacional resumido e aponta para os artefatos canônicos.
