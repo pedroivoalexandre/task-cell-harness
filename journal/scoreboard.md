@@ -20,6 +20,7 @@ O scoreboard resume o estado das tarefas, mas não substitui os contratos, relat
 | HARNESS-001 | Task Cell Harness | REGISTRAR_SCOREBOARD | Publicada | Acer | Gemini em TESTAR | Codex em TESTAR | `1c1f7e09ada3f8f58453f433faee6c76ed87d5c8` | FINALIZADO |
 | APP-005 | App de Aprendizagem | REGISTRAR_SCOREBOARD | Publicada e aprovada | Acer | Codex em REGISTRAR_SCOREBOARD | Codex em REGISTRAR_SCOREBOARD | `ac0b1c1` | FINALIZADO |
 | APP-006 | App de Aprendizagem | REGISTRAR_SCOREBOARD | Publicada e aprovada | Acer | Codex em REGISTRAR_SCOREBOARD | Codex em REGISTRAR_SCOREBOARD | `9b16620` | FINALIZADO |
+| APP-007 | App de Aprendizagem | REGISTRAR_SCOREBOARD | Publicada e aprovada | Acer | Claude em TESTAR, Codex em PUBLICAR e REGISTRAR_SCOREBOARD | Codex em TESTAR, PUBLICAR e REGISTRAR_SCOREBOARD | `36230006d057e7ed2bca3cc2d97a55a8a0068da6` | FINALIZADO |
 
 ## Registros detalhados
 
@@ -159,4 +160,105 @@ O scoreboard resume o estado das tarefas, mas não substitui os contratos, relat
 - O modo offline-first foi preservado.
 - Nenhum código funcional foi criado.
 - Nenhum dado sensível foi criado ou proposto.
+- O scoreboard registra o estado operacional resumido e aponta para os artefatos canônicos.
+
+### APP-007 — Criar MVP Flutter inicial navegável
+
+- **Task ID:** `APP-007`
+- **Título:** Criar MVP Flutter inicial navegável
+- **Projeto:** App de Aprendizagem
+- **Repositório:** `/home/vo/workspace/projetos/app-aprendizagem`
+- **Branch:** `main`
+- **Estado atual:** `REGISTRAR_SCOREBOARD`
+- **Resultado:** Publicada e aprovada
+- **Worker:** Acer
+- **Executor planejado:** Gemini em `IMPLEMENTAR`, Claude em `TESTAR`, Gemini em `CORRIGIR`, Codex em `TESTAR`, Claude em `VERIFICAR`, Codex em `DOCUMENTAR`, Codex em `PUBLICAR`, Codex em `REGISTRAR_SCOREBOARD`
+- **Executor real:** Gemini em `IMPLEMENTAR`, Claude em `TESTAR` inicial, Gemini em `CORRIGIR`, Codex em `TESTAR`, Claude em `VERIFICAR`, Codex em `DOCUMENTAR`, Codex em `PUBLICAR`, Codex em `REGISTRAR_SCOREBOARD`
+- **Commit:** `36230006d057e7ed2bca3cc2d97a55a8a0068da6`
+- **Mensagem do commit:** `Publish APP-007 navigable Flutter MVP`
+
+#### Histórico de execução
+
+- `IMPLEMENTAR`: concluído pelo Gemini.
+- `TESTAR` inicial: executado pelo Claude, com ressalvas arquiteturais.
+- `CORRIGIR`: concluído pelo Gemini.
+- `TESTAR` final: aprovado pelo Codex.
+- `VERIFICAR`: aprovado pelo Claude.
+- `DOCUMENTAR`: consolidado pelo Codex.
+- `PUBLICAR`: concluído pelo Codex.
+- `REGISTRAR_SCOREBOARD`: concluído pelo Codex.
+
+#### Exceção operacional
+
+- etapa: `TESTAR` final;
+- executor planejado: `Claude`;
+- executor real: `Codex`;
+- motivo: decisão operacional do Central02;
+- impacto no contrato da Task Cell: nenhum.
+
+#### Artefatos publicados
+
+- `flutter_app/**`
+- `reports/APP-007_relatorio.md`
+- `task-cells/APP-007_mvp_flutter_inicial.json`
+
+#### Resultado entregue
+
+- MVP Flutter inicial navegável.
+- `HomeScreen`.
+- `ModulesScreen`.
+- `ActivityScreen`.
+- reconhecimento das vogais A, E, I, O e U.
+- catálogo local em `flutter_app/assets/data/activities.json`.
+- hierarquia `modules -> levels -> activities`.
+- regra pedagógica encapsulada em `ActivityEngine`.
+- progresso somente em memória.
+
+#### Validações
+
+- `flutter analyze` aprovado sem issues.
+- `flutter test` aprovado.
+- 6 testes aprovados.
+- JSON da Task Cell válido.
+- JSON de atividades válido.
+- working tree final do aplicativo limpa.
+- branch do aplicativo sincronizada com `origin/main`.
+
+#### Restrições preservadas
+
+- sem login.
+- sem backend.
+- sem dados sensíveis.
+- sem persistência de acertos.
+- sem dependências externas adicionais.
+- sem build Android.
+- sem integração com Tablet.
+- sem alteração do Task Cell Harness fora do scoreboard.
+- sem início da APP-008.
+- sem início da INFRA-002.
+- sem início da FASE 5.
+
+#### Observações não impeditivas
+
+- melhorar futuramente a nomenclatura de alguns grupos aninhados em `widget_test.dart`.
+- a estrutura real de diretórios ficou mais simples que a proposta documental da APP-006.
+- somente o módulo de vogais foi implementado, conforme o escopo da APP-007.
+
+#### Pendências
+
+- Nenhuma.
+
+#### Riscos
+
+- Baixo.
+- Registro limitado ao scoreboard oficial, sem alterar o contrato da Task Cell.
+
+#### Próximo estado
+
+`FINALIZADO`
+
+#### Observações
+
+- A APP-007 foi registrada no scoreboard oficial do Task Cell Harness.
+- A APP-007 foi publicada e aprovada com commit e push concluídos.
 - O scoreboard registra o estado operacional resumido e aponta para os artefatos canônicos.
